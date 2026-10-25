@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { useProfile } from '@/features/profile/queries';
 import { useMe } from '@/hooks/use-me';
 
 /**
@@ -9,12 +8,11 @@ import { useMe } from '@/hooks/use-me';
  */
 export function OnboardingRedirect() {
   const { data: me } = useMe();
-  const { data: profile } = useProfile({ enabled: !!me });
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!me || !profile || profile.onboardedAt) return;
+    if (!me?.onboardingPending) return;
     const key = `gatherly:onboarding-offered:${me.user.id}`;
     try {
       if (localStorage.getItem(key)) return;
@@ -23,7 +21,7 @@ export function OnboardingRedirect() {
       return; // Storage blocked: never redirect rather than redirect on every visit.
     }
     if (pathname !== '/onboarding') navigate('/onboarding', { replace: true });
-  }, [me, profile, pathname, navigate]);
+  }, [me, pathname, navigate]);
 
   return null;
 }
