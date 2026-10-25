@@ -52,7 +52,8 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     const startsAt = localTime(now, when.days, when.at, event.timezone);
     const createdAt = new Date(Math.min(+now, +startsAt) - 21 * DAY_MS);
     // Rotate through the members so each event draws a different crowd.
-    const crowd = [...members.slice(i * 3), ...members.slice(0, i * 3)].slice(0, going);
+    const shift = (i * 3) % members.length;
+    const crowd = [...members.slice(shift), ...members.slice(0, shift)].slice(0, going);
     const attendeeIds = crowd.map((m) => m.id);
     if (alex) attendeeIds.unshift(idOf.get(PERSONAS.attendee.name)!);
     const [row] = await tx
