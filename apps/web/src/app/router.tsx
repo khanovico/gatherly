@@ -1,5 +1,5 @@
 import { createBrowserRouter } from 'react-router';
-import { AppShell } from '@/components/app-shell';
+import { AppShell, ShellFallback } from '@/components/app-shell';
 import { ErrorBoundary } from '@/pages/error';
 
 /**
@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@/pages/error';
 export const router = createBrowserRouter([
   {
     Component: AppShell,
+    HydrateFallback: ShellFallback,
     ErrorBoundary,
     children: [
       {
