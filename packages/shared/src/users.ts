@@ -10,6 +10,18 @@ export const userSummary = z.object({
 });
 export type UserSummary = z.infer<typeof userSummary>;
 
+const email = z.string().trim().toLowerCase().pipe(z.email());
+
+export const signupInput = z.object({
+  name: z.string().trim().min(1).max(80),
+  email,
+  password: z.string().min(8).max(128),
+});
+export type SignupInput = z.infer<typeof signupInput>;
+
+export const signinInput = z.object({ email, password: z.string().min(1).max(128) });
+export type SigninInput = z.infer<typeof signinInput>;
+
 /** Users without a subscription are on `free`; admins get every entitlement through their role. */
 export const me = z.object({
   user: userSummary.extend({ email: z.email(), role: Role, status: UserStatus }),

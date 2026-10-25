@@ -1,6 +1,15 @@
 import { z } from 'zod';
-import { isoDateTime } from './common';
-import { Category, EventFormat, EventStatus, RegistrationStatus } from './enums';
+import { isoDateTime, paginated } from './common';
+import {
+  Category,
+  EventFormat,
+  EventStatus,
+  RadiusKm,
+  ReasonKind,
+  RegistrationStatus,
+  SortOrder,
+} from './enums';
+import { NeighborhoodId, locationQuery } from './places';
 import { userSummary } from './users';
 
 const isTimeZone = (tz: string) => {
@@ -60,11 +69,32 @@ export type CreateEventInput = z.infer<typeof createEventInput>;
 export const updateEventInput = eventFields.partial().superRefine(checkEventRules);
 export type UpdateEventInput = z.infer<typeof updateEventInput>;
 
-export const eventListQuery = z.object({
+/** Lowercase words joined by hyphens, e.g. `jazz`, `machine-learning`. */
+export const tag = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(30)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'Lowercase words joined by hyphens');
+
+/**
+ * `GET /events`. `sort` defaults to `for_you` when signed in and onboarded, else `soonest`.
+ * `tags` is comma-separated on the wire (`tags=jazz,live-music`). `radiusKm` needs a location.
+ */
+export const eventListQuery = locationQuery.extend({
   q: z.string().trim().max(100).optional(),
   category: Category.optional(),
+  tags: z
+    .string()
+    .transform((s) => s.split(','))
+    .pipe(z.array(tag).max(10))
+    .optional(),
+  format: EventFormat.optional(),
+  freeOnly: z.stringbool().optional(),
   from: isoDateTime.optional(),
   to: isoDateTime.optional(),
+  sort: SortOrder.optional(),
+  radiusKm: z.coerce.number().pipe(RadiusKm).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(12),
 });
@@ -88,8 +118,22 @@ export const eventSummary = z.object({
   currency: z.string(),
   status: EventStatus,
   coverImage: z.string(),
+  neighborhood: NeighborhoodId.nullable().optional(),
+  /** The signed-in viewer saved this event. Absent when signed out. */
+  saved: z.boolean().optional(),
+  /** Why a ranked result was shown, strongest first. */
+  reasons: z.array(z.object({ kind: ReasonKind, label: z.string() })).optional(),
+  /** From the viewer's location; absent for online events or when the location is unknown. */
+  distanceKm: z.number().min(0).optional(),
 });
 export type EventSummary = z.infer<typeof eventSummary>;
+
+/** `GET /events`: a page, plus what ordered it. Clients echo both on interactions. */
+export const eventFeed = paginated(eventSummary).extend({
+  rankerVersion: z.string().optional(),
+  requestId: z.string().optional(),
+});
+export type EventFeed = z.infer<typeof eventFeed>;
 
 export const registration = z.object({
   id: z.uuid(),
