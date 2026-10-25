@@ -1,7 +1,6 @@
 import { ChevronDown, CreditCard, LogIn, LogOut, Ticket } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,7 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import { personaInfo } from '@/features/auth/personas';
+import { PlanBadge } from '@/features/billing/plan-badge';
 import { useDemoLogin, usePersonas, useSignOut } from '@/features/auth/use-demo-login';
 import { useMe } from '@/hooks/use-me';
 
@@ -25,11 +26,12 @@ const UserAvatar = ({ name, src, size }: { name: string; src: string | null; siz
 
 /** Header identity slot: sign-in button, or the current persona with switch and sign-out. */
 export function PersonaSwitcher() {
-  const { data: me } = useMe();
+  const { data: me, isPending } = useMe();
   const { data: personas = [] } = usePersonas();
   const login = useDemoLogin();
   const signOut = useSignOut();
 
+  if (isPending) return <Skeleton className="size-8 rounded-full" />;
   if (!me) {
     return (
       <Button asChild variant="outline">
@@ -60,9 +62,7 @@ export function PersonaSwitcher() {
             <span className="text-foreground block truncate font-medium">{user.name}</span>
             <span className="block truncate text-xs font-normal">{user.email}</span>
           </span>
-          <Badge variant={me.plan === 'premium' ? 'default' : 'secondary'} className="capitalize">
-            {user.role === 'admin' ? 'Admin' : me.plan}
-          </Badge>
+          <PlanBadge me={me} />
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

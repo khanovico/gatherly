@@ -1,4 +1,4 @@
-import type { Plan } from '@gatherly/shared';
+import type { Plan, Subscription } from '@gatherly/shared';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -18,3 +18,11 @@ export const formatPrice = (cents: number) =>
     currency: 'USD',
     minimumFractionDigits: cents % 100 ? 2 : 0,
   }).format(cents / 100);
+
+/** `null` when the user never subscribed, i.e. is on Free. */
+export function useSubscription() {
+  return useQuery({
+    queryKey: queryKeys.billing.subscription,
+    queryFn: () => apiFetch<Subscription | null>('/billing/subscription'),
+  });
+}
