@@ -51,6 +51,7 @@ export function EventActions({ event }: { event: EventSummary }) {
         </DropdownMenuContent>
       </DropdownMenu>
       <ConfirmDialog
+        icon={Ban}
         open={confirming}
         onOpenChange={setConfirming}
         title={`Cancel “${event.title}”?`}

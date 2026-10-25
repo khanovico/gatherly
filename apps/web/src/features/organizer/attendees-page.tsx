@@ -163,6 +163,7 @@ function AttendeeList({ event, attendees }: { event: EventDetail; attendees: Att
         </p>
       )}
       <ConfirmDialog
+        icon={UserMinus}
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
         title={`Remove ${removing?.user.name ?? 'attendee'}?`}
