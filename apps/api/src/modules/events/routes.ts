@@ -1,14 +1,13 @@
 import {
   createEventInput,
   eventDetail,
+  eventFeed,
   eventListQuery,
-  eventSummary,
-  paginated,
   updateEventInput,
   type CreateEventInput,
   type EventDetail,
 } from '@gatherly/shared';
-import { and, asc, eq, gte, ilike, inArray, lte, or } from 'drizzle-orm';
+import { and, eq, inArray, lte } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -17,6 +16,7 @@ import type { AuthUser } from '../../lib/auth';
 import { AppError } from '../../lib/errors';
 import { businessMetrics } from '../../lib/metrics';
 import { assertOwnerOrAdmin, requireEntitlement, requireUser } from '../../lib/guards';
+import { buildFeed } from '../../ranking/feed';
 
 type EventRow = typeof events.$inferSelect;
 
@@ -93,29 +93,8 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/events',
-    { schema: { querystring: eventListQuery, response: { 200: paginated(eventSummary) } } },
-    async (request) => {
-      const { q, category, from, to, page, pageSize } = request.query;
-      const pattern = q && `%${q.replace(/[\\%_]/g, '\\$&')}%`;
-      const where = and(
-        eq(events.status, 'published'),
-        gte(events.startsAt, from ? new Date(from) : new Date()),
-        to ? lte(events.startsAt, new Date(to)) : undefined,
-        category ? eq(events.category, category) : undefined,
-        pattern ? or(ilike(events.title, pattern), ilike(events.summary, pattern)) : undefined,
-      );
-      const [rows, total] = await Promise.all([
-        app.db
-          .select()
-          .from(events)
-          .where(where)
-          .orderBy(asc(events.startsAt), asc(events.id))
-          .limit(pageSize)
-          .offset((page - 1) * pageSize),
-        app.db.$count(events, where),
-      ]);
-      return { items: rows.map(withIsoDates), page, pageSize, total };
-    },
+    { schema: { querystring: eventListQuery, response: { 200: eventFeed } } },
+    async (request) => buildFeed(app.db, request.query, request.user),
   );
 
   app.get('/events/:id', { schema: { params, response: { 200: eventDetail } } }, async (request) =>
