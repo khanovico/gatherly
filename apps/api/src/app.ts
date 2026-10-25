@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { LogController } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -8,6 +8,7 @@ import { config } from './config';
 import { createDb, type Db } from './db/client';
 import { registerAuth } from './lib/auth';
 import { registerApiNotFound, registerErrorHandling } from './lib/errors';
+import { registerRequestLogging, registerTraceIdHeader } from './lib/request-telemetry';
 import adminRoutes from './modules/admin/routes';
 import authRoutes from './modules/auth/routes';
 import billingRoutes from './modules/billing/routes';
@@ -48,6 +49,8 @@ export async function buildApp(opts: { db?: Db } = {}) {
       level: config.LOG_LEVEL,
       redact: { paths: ['email', '*.email'], censor: '[redacted]' },
     },
+    // Request lines come from registerRequestLogging instead.
+    logController: new LogController({ disableRequestLogging: true }),
     trustProxy: true,
   });
   app.setValidatorCompiler(validatorCompiler);
@@ -58,8 +61,10 @@ export async function buildApp(opts: { db?: Db } = {}) {
   if (!opts.db) app.addHook('onClose', () => db.$client.end());
 
   registerErrorHandling(app);
+  registerRequestLogging(app);
   await app.register(
     async (api) => {
+      registerTraceIdHeader(api);
       registerApiNotFound(api);
       await registerAuth(api);
       for (const routes of modules) await api.register(routes);

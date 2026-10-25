@@ -23,10 +23,20 @@ const healthRoutes: FastifyPluginAsyncZod = async (app) => {
     '/version',
     {
       schema: {
-        response: { 200: z.object({ gitSha: z.string(), buildTime: z.string().nullable() }) },
+        response: {
+          200: z.object({
+            gitSha: z.string(),
+            buildTime: z.string().nullable(),
+            uptimeSeconds: z.number(),
+          }),
+        },
       },
     },
-    () => ({ gitSha: config.GIT_SHA, buildTime: config.BUILD_TIME ?? null }),
+    () => ({
+      gitSha: config.GIT_SHA,
+      buildTime: config.BUILD_TIME ?? null,
+      uptimeSeconds: Math.round(process.uptime()),
+    }),
   );
 };
 

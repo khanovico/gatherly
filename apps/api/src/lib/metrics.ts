@@ -12,6 +12,12 @@ const cancellations = meter.createCounter('cancellations', {
 });
 const eventsCreated = meter.createCounter('events_created', { description: 'Events created' });
 
+// Start every series at 0, so the dashboard's increase() also counts the first event after a restart.
+for (const result of ['confirmed', 'EVENT_FULL', 'ALREADY_REGISTERED', 'EVENT_STARTED'] as const)
+  registrations.add(0, { result });
+cancellations.add(0);
+eventsCreated.add(0);
+
 /** Business counters for the Grafana dashboard. HTTP RED metrics come from the http instrumentation. */
 export const businessMetrics = {
   /** `confirmed`, or the error code that refused the seat (`EVENT_FULL`, `ALREADY_REGISTERED`, …). */
