@@ -19,6 +19,8 @@ export const queryKeys = {
     stats: ['admin', 'stats'] as const,
     users: (query: object) => ['admin', 'users', query] as const,
     events: (query: object) => ['admin', 'events', query] as const,
+    version: ['admin', 'version'] as const,
+    ready: ['admin', 'ready'] as const,
   },
   billing: {
     plans: ['billing', 'plans'] as const,

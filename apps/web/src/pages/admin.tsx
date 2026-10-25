@@ -1,10 +1,11 @@
-import { CalendarDays, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
+import { Activity, CalendarDays, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessDenied } from '@/features/admin/access-denied';
 import { DangerZone } from '@/features/admin/danger-zone';
 import { EventsTab } from '@/features/admin/events-tab';
+import { ObservabilityTab } from '@/features/admin/observability-tab';
 import { OverviewTab } from '@/features/admin/overview-tab';
 import { UsersTab } from '@/features/admin/users-tab';
 import { useMe } from '@/hooks/use-me';
@@ -13,6 +14,7 @@ const sections = [
   { value: 'overview', label: 'Overview', icon: LayoutGrid, Panel: OverviewTab },
   { value: 'users', label: 'Users', icon: Users, Panel: UsersTab },
   { value: 'events', label: 'Events', icon: CalendarDays, Panel: EventsTab },
+  { value: 'observability', label: 'Observability', icon: Activity, Panel: ObservabilityTab },
 ];
 
 export function Component() {
