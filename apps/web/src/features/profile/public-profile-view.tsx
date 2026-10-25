@@ -17,22 +17,29 @@ export function PublicProfileView({ profile }: { profile: PublicProfile }) {
   const { data: me } = useMe();
   const [params, setParams] = useSearchParams();
   const firstName = profile.name.split(' ')[0];
-  const tabs: Record<Tab, { label: string; events: PublicProfile['hosting']; empty: string }> = {
+  const tabs: Partial<
+    Record<Tab, { label: string; events: PublicProfile['hosting']; empty: string }>
+  > = {
     hosting: {
       label: 'Hosting',
       events: profile.hosting,
       empty: `${firstName} isn't hosting anything coming up.`,
     },
-    attending: {
-      label: 'Attending',
-      events: profile.attending,
-      empty: `${firstName} hasn't joined any upcoming events.`,
-    },
+    // Only the owner gets their own attending list.
+    ...(profile.attending && {
+      attending: {
+        label: 'Attending',
+        events: profile.attending,
+        empty: "You haven't joined any upcoming events.",
+      },
+    }),
   };
   const tab: Tab =
-    params.get('tab') === 'attending' || (!params.get('tab') && !profile.hosting.length)
+    tabs.attending &&
+    (params.get('tab') === 'attending' || (!params.get('tab') && !profile.hosting.length))
       ? 'attending'
       : 'hosting';
+  const current = tabs[tab]!;
 
   return (
     <div className="page-container max-w-6xl py-6 sm:py-10">
@@ -84,15 +91,15 @@ export function PublicProfileView({ profile }: { profile: PublicProfile }) {
         <TabsList>
           {(Object.keys(tabs) as Tab[]).map((key) => (
             <TabsTrigger key={key} value={key}>
-              {tabs[key].label}
-              <span className="text-muted-foreground tabular-nums">{tabs[key].events.length}</span>
+              {tabs[key]!.label}
+              <span className="text-muted-foreground tabular-nums">{tabs[key]!.events.length}</span>
             </TabsTrigger>
           ))}
         </TabsList>
         <TabsContent value={tab} className="mt-6">
-          {tabs[tab].events.length ? (
+          {current.events.length ? (
             <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {tabs[tab].events.map((event) => (
+              {current.events.map((event) => (
                 <li key={event.id}>
                   <EventCard event={event} className="h-full" />
                 </li>
@@ -102,7 +109,7 @@ export function PublicProfileView({ profile }: { profile: PublicProfile }) {
             <IllustratedState
               image="/images/empty/no-events.webp"
               title="Nothing here yet"
-              description={tabs[tab].empty}
+              description={current.empty}
             />
           )}
         </TabsContent>

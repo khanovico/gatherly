@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { users } from '../src/db/schema';
+import { registrations, users } from '../src/db/schema';
 import { createEvent, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
@@ -42,4 +42,19 @@ it('shows upcoming hosting on a public profile and hides suspended users', async
   expect((await view()).json().hosting.map((e: { id: string }) => e.id)).toEqual([event.id]);
   await ctx.db.update(users).set({ status: 'suspended' }).where(eq(users.id, host.userId));
   expect((await view()).statusCode).toBe(404);
+});
+
+it('shows what a member is attending only to that member', async () => {
+  const host = await signedInMember(ctx.db);
+  const guest = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, host.userId, 10);
+  await ctx.db.insert(registrations).values({ eventId: event.id, userId: guest.userId });
+  const view = (cookie?: string) =>
+    ctx.app.inject({ url: `/api/v1/users/${guest.userId}`, headers: cookie ? { cookie } : {} });
+
+  expect((await view()).json().attending).toBeUndefined();
+  expect((await view(host.cookie)).json().attending).toBeUndefined();
+  expect((await view(guest.cookie)).json().attending.map((e: { id: string }) => e.id)).toEqual([
+    event.id,
+  ]);
 });

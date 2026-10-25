@@ -44,12 +44,15 @@ export const updateProfileInput = profileFields
   });
 export type UpdateProfileInput = z.infer<typeof updateProfileInput>;
 
-/** `GET /users/:id`. `hosting` and `attending` hold upcoming events, soonest first. */
+/**
+ * `GET /users/:id`. `hosting` and `attending` hold upcoming events, soonest first.
+ * `attending` is private: only the profile's owner gets it.
+ */
 export const publicProfile = userSummary.extend({
   bio: z.string().nullable(),
   interests: z.array(Category),
   memberSince: isoDateTime,
   hosting: z.array(eventSummary),
-  attending: z.array(eventSummary),
+  attending: z.array(eventSummary).optional(),
 });
 export type PublicProfile = z.infer<typeof publicProfile>;

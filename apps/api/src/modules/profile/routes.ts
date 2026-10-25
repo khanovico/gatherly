@@ -139,9 +139,11 @@ const profileRoutes: FastifyPluginAsyncZod = async (app) => {
         .select({ id: registrations.eventId })
         .from(registrations)
         .where(and(eq(registrations.userId, id), inArray(registrations.status, ACTIVE_STATUSES)));
+      // Where someone will be is theirs to see; hosting is public.
+      const isOwner = request.user?.id === id;
       const [hosting, attending] = await Promise.all([
         upcoming(eq(events.organizerId, id), request.user?.id),
-        upcoming(inArray(events.id, attendingIds), request.user?.id),
+        isOwner ? upcoming(inArray(events.id, attendingIds), id) : undefined,
       ]);
       return {
         ...user,
