@@ -8,6 +8,10 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   GIT_SHA: z.string().default('dev'),
   BUILD_TIME: z.string().optional(),
+  // Telemetry is off unless set. The OTel SDK also reads the OTEL_* values from the environment itself.
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
+  OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
+  SENTRY_DSN_API: z.url().optional(),
 });
 
 // GIT_SHA and BUILD_TIME are named explicitly so the production build can inline them.

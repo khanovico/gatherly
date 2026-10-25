@@ -35,7 +35,13 @@ const modules = [
 
 /** Pass `db` to share a connection (tests); otherwise the app opens and closes its own pool. */
 export async function buildApp(opts: { db?: Db } = {}) {
-  const app = Fastify({ logger: { level: config.LOG_LEVEL }, trustProxy: true });
+  const app = Fastify({
+    logger: {
+      level: config.LOG_LEVEL,
+      redact: { paths: ['email', '*.email'], censor: '[redacted]' },
+    },
+    trustProxy: true,
+  });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 

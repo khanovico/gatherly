@@ -1,5 +1,6 @@
 import { STATUS_CODES } from 'node:http';
 import type { ErrorCode, Problem } from '@gatherly/shared';
+import * as Sentry from '@sentry/node';
 import type { FastifyInstance } from 'fastify';
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 import { ZodError } from 'zod';
@@ -60,7 +61,10 @@ const toProblem = (error: unknown): Problem => {
 export const registerErrorHandling = (app: FastifyInstance) => {
   app.setErrorHandler((error, request, reply) => {
     const body = toProblem(error);
-    if (body.status >= 500) request.log.error({ err: error }, 'request failed');
+    if (body.status >= 500) {
+      request.log.error({ err: error }, 'request failed');
+      Sentry.captureException(error);
+    }
     return reply.status(body.status).type('application/problem+json').send(body);
   });
 };
