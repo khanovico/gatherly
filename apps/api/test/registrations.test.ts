@@ -54,3 +54,23 @@ it('never overbooks: 25 parallel registrations for 10 seats', async () => {
   expect(responses.filter((r) => r.json().code === 'EVENT_FULL')).toHaveLength(15);
   expect(await seatCounts(ctx.db, event.id)).toEqual({ registeredCount: 10, confirmed: 10 });
 });
+
+it('survives one member registering and cancelling at the same time', async () => {
+  const organizer = await signedInMember(ctx.db);
+  const member = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, organizer.userId, 10);
+  const cancel = () =>
+    ctx.app.inject({
+      method: 'DELETE',
+      url: `/api/v1/events/${event.id}/registrations/me`,
+      headers: { cookie: member.cookie },
+    });
+
+  const responses = await Promise.all(
+    Array.from({ length: 30 }, (_, i) => (i % 2 ? cancel() : register(event.id, member.cookie))),
+  );
+
+  expect(responses.map((r) => r.statusCode).filter((s) => s >= 500)).toEqual([]);
+  const { registeredCount, confirmed } = await seatCounts(ctx.db, event.id);
+  expect(registeredCount).toBe(confirmed);
+});

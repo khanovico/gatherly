@@ -65,14 +65,31 @@ export const takeSeat = (db: Db, eventId: string, userId: string) =>
     }
   });
 
-/** Cancels the matching confirmed registration and frees its seat, in the caller's transaction. */
+/**
+ * Cancels the matching confirmed registration and frees its seat, in the caller's transaction.
+ * Locks the event row before touching the registration, the same order as `takeSeat`, so a
+ * register and a cancel running at once queue up instead of deadlocking.
+ */
 export const releaseSeat = async (tx: Tx, match: SQL) => {
+  const active = and(match, eq(registrations.status, 'confirmed'));
+  const notRegistered = new AppError('NOT_REGISTERED', 404, 'No active registration');
+  const [target] = await tx
+    .select({ eventId: registrations.eventId })
+    .from(registrations)
+    .where(active);
+  if (!target) throw notRegistered;
+  await tx
+    .select({ id: events.id })
+    .from(events)
+    .where(eq(events.id, target.eventId))
+    .for('update');
+  // Re-checked under the lock: a concurrent cancel may have won.
   const [row] = await tx
     .update(registrations)
     .set({ status: 'cancelled', cancelledAt: new Date() })
-    .where(and(match, eq(registrations.status, 'confirmed')))
+    .where(active)
     .returning();
-  if (!row) throw new AppError('NOT_REGISTERED', 404, 'No active registration');
+  if (!row) throw notRegistered;
   const [event] = await tx
     .update(events)
     .set({ registeredCount: sql`${events.registeredCount} - 1` })
