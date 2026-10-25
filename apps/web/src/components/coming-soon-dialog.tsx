@@ -16,14 +16,17 @@ import {
 type ComingSoonDialogProps = {
   title: string;
   description: ReactNode;
-  trigger: ReactNode;
+  /** The button that opens it. Omit it and pass `open` to open the dialog from code. */
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /** Explains a feature that is visible in the demo but not built yet (sign-up, billing). */
-export function ComingSoonDialog({ title, description, trigger }: ComingSoonDialogProps) {
+export function ComingSoonDialog({ title, description, trigger, ...state }: ComingSoonDialogProps) {
   return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog {...state}>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="items-center text-center">
           <img src="/images/brand/mark.webp" alt="" className="size-16" />
