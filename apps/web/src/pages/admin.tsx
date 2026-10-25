@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessDenied } from '@/features/admin/access-denied';
+import { DangerZone } from '@/features/admin/danger-zone';
 import { EventsTab } from '@/features/admin/events-tab';
 import { OverviewTab } from '@/features/admin/overview-tab';
 import { UsersTab } from '@/features/admin/users-tab';
@@ -40,6 +41,7 @@ export function Component() {
         </div>
       </header>
       <AdminSections />
+      <DangerZone />
     </div>
   );
 }

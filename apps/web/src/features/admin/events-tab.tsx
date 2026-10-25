@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { CancelEventButton } from '@/features/admin/cancel-event-button';
 import { toSearchParams, useDebounced } from '@/features/admin/lib';
 import { Pager, SearchField } from '@/features/admin/list-controls';
 import { CategoryBadge } from '@/features/events/category-badge';
@@ -153,7 +154,8 @@ function EventRow({ event }: { event: EventSummary }) {
           {phase}
         </Badge>
       </TableCell>
-      <TableCell className="pr-4 text-right">
+      <TableCell className="pr-4 text-right whitespace-nowrap">
+        <CancelEventButton event={event} />
         <Button asChild variant="ghost" size="sm">
           <Link to={`/events/${event.id}`} aria-label={`View ${event.title}`}>
             View <ArrowUpRight />
