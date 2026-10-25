@@ -114,6 +114,13 @@ export type EventDetail = z.infer<typeof eventDetail>;
 export const myRegistration = registration.extend({ event: eventSummary });
 export type MyRegistration = z.infer<typeof myRegistration>;
 
+/** `GET /me/registrations`: active registrations; upcoming soonest first, past most recent first. */
+export const myRegistrations = z.object({
+  upcoming: z.array(myRegistration),
+  past: z.array(myRegistration),
+});
+export type MyRegistrations = z.infer<typeof myRegistrations>;
+
 export const attendee = z.object({
   registrationId: z.uuid(),
   user: userSummary,

@@ -1,10 +1,13 @@
-import type { Registration } from '@gatherly/shared';
-import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
+import type { EventSummary, Registration } from '@gatherly/shared';
+import { and, eq, gt, inArray, lt, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../../db/client';
 import { events, registrations } from '../../db/schema';
 import { AppError } from '../../lib/errors';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/** Statuses that hold a seat. */
+export const ACTIVE_STATUSES = ['pending_payment', 'confirmed'] as const;
 
 const isUniqueViolation = (err: unknown) => {
   const e = err as { code?: string; cause?: { code?: string } };
@@ -25,7 +28,7 @@ const unavailable = async (tx: Tx, eventId: string, userId: string) => {
     and(
       eq(registrations.eventId, eventId),
       eq(registrations.userId, userId),
-      inArray(registrations.status, ['pending_payment', 'confirmed']),
+      inArray(registrations.status, ACTIVE_STATUSES),
     ),
   );
   if (active) return new AppError('ALREADY_REGISTERED', 409);
@@ -62,8 +65,30 @@ export const takeSeat = (db: Db, eventId: string, userId: string) =>
     }
   });
 
+/** Cancels the matching confirmed registration and frees its seat, in the caller's transaction. */
+export const releaseSeat = async (tx: Tx, match: SQL) => {
+  const [row] = await tx
+    .update(registrations)
+    .set({ status: 'cancelled', cancelledAt: new Date() })
+    .where(and(match, eq(registrations.status, 'confirmed')))
+    .returning();
+  if (!row) throw new AppError('NOT_REGISTERED', 404, 'No active registration');
+  const [event] = await tx
+    .update(events)
+    .set({ registeredCount: sql`${events.registeredCount} - 1` })
+    .where(eq(events.id, row.eventId))
+    .returning({ startsAt: events.startsAt });
+  return { registration: row, startsAt: event!.startsAt };
+};
+
 export const toRegistration = (row: typeof registrations.$inferSelect): Registration => ({
   ...row,
   createdAt: row.createdAt.toISOString(),
   cancelledAt: row.cancelledAt?.toISOString() ?? null,
+});
+
+export const toEventSummary = (row: typeof events.$inferSelect): EventSummary => ({
+  ...row,
+  startsAt: row.startsAt.toISOString(),
+  endsAt: row.endsAt.toISOString(),
 });
