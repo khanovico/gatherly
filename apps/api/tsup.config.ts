@@ -10,7 +10,7 @@ const gitSha = () => {
 };
 
 export default defineConfig({
-  entry: ['src/server.ts', 'src/migrate.ts'],
+  entry: ['src/server.ts', 'src/migrate.ts', 'src/telemetry.ts'],
   format: 'esm',
   platform: 'node',
   target: 'node22',
