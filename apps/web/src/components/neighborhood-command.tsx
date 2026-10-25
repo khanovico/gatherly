@@ -1,5 +1,4 @@
 import { Borough, NEIGHBORHOODS, type NeighborhoodId } from '@gatherly/shared';
-import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import {
   Command,
@@ -9,7 +8,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
 
 type Props = {
   selected?: string;
@@ -32,10 +30,10 @@ export function NeighborhoodCommand({ selected, onSelect, children }: Props) {
               <CommandItem
                 key={n.id}
                 value={`${n.name} ${n.borough}`}
+                data-checked={n.id === selected}
                 onSelect={() => onSelect(n.id)}
               >
                 {n.name}
-                <Check className={cn('ml-auto', n.id !== selected && 'opacity-0')} />
               </CommandItem>
             ))}
           </CommandGroup>

@@ -1,5 +1,5 @@
 import type { SortOrder } from '@gatherly/shared';
-import { ArrowDownUp } from 'lucide-react';
+import { CalendarClock, Flame, MapPin, Sparkles, type LucideIcon } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -8,11 +8,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const labels: Record<SortOrder, string> = {
-  for_you: 'For you',
-  soonest: 'Soonest',
-  nearest: 'Nearest',
-  popular: 'Popular',
+const labels: Record<SortOrder, [string, LucideIcon]> = {
+  for_you: ['For you', Sparkles],
+  soonest: ['Soonest', CalendarClock],
+  nearest: ['Nearest', MapPin],
+  popular: ['Popular', Flame],
 };
 
 /** Result order. "For you" is offered only to signed-in members, whose profile it ranks by. */
@@ -29,15 +29,18 @@ export function SortSelect({
   return (
     <Select value={value} onValueChange={(sort) => onChange(sort as SortOrder)}>
       <SelectTrigger aria-label="Sort events" className="h-11! shrink-0 rounded-full px-4 sm:w-40">
-        <ArrowDownUp aria-hidden className="text-muted-foreground max-sm:hidden" />
         <SelectValue />
       </SelectTrigger>
-      <SelectContent position="popper" align="end">
-        {options.map((sort) => (
-          <SelectItem key={sort} value={sort}>
-            {labels[sort]}
-          </SelectItem>
-        ))}
+      <SelectContent position="popper" align="end" className="min-w-44 rounded-xl">
+        {options.map((sort) => {
+          const [label, Icon] = labels[sort];
+          return (
+            <SelectItem key={sort} value={sort}>
+              <Icon aria-hidden className="text-muted-foreground" />
+              {label}
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

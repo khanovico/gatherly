@@ -5,7 +5,7 @@ import {
   type NeighborhoodId,
   type RadiusKm,
 } from '@gatherly/shared';
-import { Check, ChevronsUpDown, Globe, House, LocateFixed, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Globe, House, LocateFixed, MapPin, SlidersHorizontal } from 'lucide-react';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { NeighborhoodCommand } from '@/components/neighborhood-command';
@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { cn } from '@/lib/utils';
 
 export type PlaceFilters = {
   format?: EventFormat;
@@ -105,12 +104,12 @@ function NearPicker(props: { where: string; home?: string; onPick: (near: string
     setOpen(false);
   };
   const extra = (value: string, Icon: typeof Globe, text: string) => (
-    <CommandItem value={text} onSelect={() => pick(value)}>
+    <CommandItem value={text} data-checked={props.where === value} onSelect={() => pick(value)}>
       <Icon className="text-muted-foreground" />
       {text}
-      <Check className={cn('ml-auto', props.where !== value && 'opacity-0')} />
     </CommandItem>
   );
+  const Lead = props.where === 'me' ? LocateFixed : props.where || !props.home ? MapPin : House;
   return (
     <div className="space-y-2">
       <p id={id} className="font-medium">
@@ -119,19 +118,24 @@ function NearPicker(props: { where: string; home?: string; onPick: (near: string
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             role="combobox"
             aria-expanded={open}
             aria-labelledby={`${id} ${id}-value`}
-            className="h-10 w-full justify-between font-normal"
+            className="bg-muted hover:bg-accent h-10 w-full justify-start rounded-full px-4 font-normal"
           >
+            <Lead className="text-primary" />
             <span id={`${id}-value`} className="truncate">
               {label}
             </span>
-            <ChevronsUpDown className="opacity-50" />
+            <ChevronDown className="text-muted-foreground ml-auto" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          className="w-(--radix-popover-trigger-width) overflow-hidden rounded-xl p-0"
+        >
           <NeighborhoodCommand selected={props.where} onSelect={pick}>
             {extra('', props.home ? House : Globe, anywhere)}
             {extra('me', LocateFixed, 'My current location')}
