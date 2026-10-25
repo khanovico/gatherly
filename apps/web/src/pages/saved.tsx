@@ -5,7 +5,6 @@ import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { RequireSignIn } from '@/components/require-entitlement';
 import { Button } from '@/components/ui/button';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
-import { SaveButton } from '@/features/events/save-button';
 import { useSavedEvents } from '@/features/events/saves';
 
 export function Component() {
@@ -56,15 +55,8 @@ function Saved() {
                 </li>
               ))
             : events.map((event) => (
-                <li key={event.id} className="relative">
+                <li key={event.id}>
                   <EventCard event={event} className="h-full" />
-                  {/* Over the cover's bottom-right corner, clear of the card's own badges. */}
-                  <div className="pointer-events-none absolute inset-x-0 top-0 aspect-video">
-                    <SaveButton
-                      event={event}
-                      className="pointer-events-auto absolute right-3 bottom-3"
-                    />
-                  </div>
                 </li>
               ))}
         </ul>
