@@ -1,8 +1,9 @@
-import type { EventListQuery } from '@gatherly/shared';
+import type { EventListQuery, SortOrder } from '@gatherly/shared';
 import {
   and,
   arrayOverlaps,
   asc,
+  desc,
   eq,
   exists,
   getTableColumns,
@@ -17,23 +18,55 @@ import {
 } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { eventHides, eventSaves, events, registrations } from '../db/schema';
+import { EARTH_RADIUS_KM, type Point } from './geo';
 
-/** Every sort ranks and pages at most this many matches (soonest first) in memory. Plenty at
- * demo scale; a larger catalog would score in SQL or a feature store. */
+/**
+ * `for_you` and the discover rails score the soonest POOL_LIMIT matches in memory, so their
+ * `total` stops at the cap and the feed flags it (`totalCapped`). Plenty at demo scale; a larger
+ * catalog would generate candidates per signal (interest, area, popularity) or score in a feature
+ * store. The other sorts order and page in SQL (`page`) and are never capped.
+ */
 export const POOL_LIMIT = 500;
 
 export type CandidateFilters = Partial<EventListQuery> & {
   viewerId?: string;
+  /** Distances are measured from here; with `radiusKm`, only in-person events within it match. */
+  origin?: Point | null;
   /** Recommendations: also drop full events and the viewer's own or registered ones. */
   recommend?: boolean;
 };
 
+/** One page in a fixed order instead of the pool. */
+export type PageRequest = { sort: Exclude<SortOrder, 'for_you'>; page: number; pageSize: number };
+
+/** Haversine distance in SQL, the same formula as geo.ts; null for online events. */
+const distanceSql = ({ lat, lng }: Point) =>
+  sql`${2 * EARTH_RADIUS_KM} * asin(sqrt(power(sin(radians(${events.lat} - ${lat}) / 2), 2) + cos(radians(${lat})) * cos(radians(${events.lat})) * power(sin(radians(${events.lng} - ${lng}) / 2), 2)))`;
+
+const savesCount = sql<number>`(select count(*) from ${eventSaves} where ${eventSaves.eventId} = ${events.id})`;
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- never ship the tsvector
 const { search, ...columns } = getTableColumns(events);
 
-/** Upcoming published events matching the filters, never ones the viewer hid. */
-export const loadCandidates = (db: Db, f: CandidateFilters) => {
-  const { q, viewerId } = f;
+/**
+ * Upcoming published events matching the filters, never ones the viewer hid: the soonest
+ * POOL_LIMIT, or one sorted page with `total` (all matches) on each row.
+ */
+export const loadCandidates = (db: Db, f: CandidateFilters, page?: PageRequest) => {
+  const { q, viewerId, origin } = f;
+  const order =
+    page &&
+    {
+      soonest: [],
+      // popularity() in rule-based.ts: fill rate plus capped saves.
+      popular: [
+        desc(
+          sql`${events.registeredCount}::float / ${events.capacity} + least(${savesCount}, 20) / 20.0`,
+        ),
+      ],
+      // Without a location nothing has a distance, so this is soonest first.
+      nearest: origin ? [sql`${distanceSql(origin)} asc nulls last`] : [],
+    }[page.sort];
   const viewerHas = (table: typeof eventSaves | typeof registrations, extra?: SQL) =>
     exists(
       db
@@ -48,13 +81,14 @@ export const loadCandidates = (db: Db, f: CandidateFilters) => {
     return tx
       .select({
         ...columns,
-        saves: db.$count(eventSaves, eq(eventSaves.eventId, events.id)),
+        saves: savesCount.mapWith(Number),
         saved: viewerId ? viewerHas(eventSaves).mapWith(Boolean) : sql<boolean>`false`,
         relevance: q
           ? sql<number>`ts_rank(${events.search}, websearch_to_tsquery('english', ${q})) + word_similarity(${q}, ${events.title})`.mapWith(
               Number,
             )
           : sql<number>`0`.mapWith(Number),
+        total: (page ? sql`count(*) over ()` : sql`0`).mapWith(Number),
       })
       .from(events)
       .where(
@@ -70,6 +104,8 @@ export const loadCandidates = (db: Db, f: CandidateFilters) => {
           q
             ? sql`(${events.search} @@ websearch_to_tsquery('english', ${q}) or ${q} <% ${events.title})`
             : undefined,
+          // A radius means "in person, within reach": online events have no distance and drop out.
+          f.radiusKm && origin ? lte(distanceSql(origin), f.radiusKm) : undefined,
           viewerId ? not(viewerHas(eventHides)) : undefined,
           f.recommend ? lt(events.registeredCount, events.capacity) : undefined,
           f.recommend && viewerId ? ne(events.organizerId, viewerId) : undefined,
@@ -83,8 +119,9 @@ export const loadCandidates = (db: Db, f: CandidateFilters) => {
             : undefined,
         ),
       )
-      .orderBy(asc(events.startsAt), asc(events.id))
-      .limit(POOL_LIMIT);
+      .orderBy(...(order ?? []), asc(events.startsAt), asc(events.id))
+      .limit(page?.pageSize ?? POOL_LIMIT)
+      .offset(page ? (page.page - 1) * page.pageSize : 0);
   });
 };
 

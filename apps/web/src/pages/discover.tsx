@@ -90,6 +90,8 @@ export function Component() {
       events.map((event) => ({ event, rankerVersion, requestId })),
     ) ?? [];
   const total = data?.pages[0]?.total ?? 0;
+  // For you ranks a capped pool, so its total is a floor.
+  const capped = Boolean(data?.pages[0]?.totalCapped);
   const filtered =
     Boolean(q || category || tags.length || dates.when || dates.from) ||
     Object.values(place).some(Boolean);
@@ -116,7 +118,7 @@ export function Component() {
     <section className="page-container py-10 sm:py-14">
       <h1 className="text-3xl font-semibold sm:text-4xl">Discover events</h1>
       <p className="text-muted-foreground mt-2" aria-live="polite">
-        {data ? `${total} upcoming ${total === 1 ? 'event' : 'events'}` : ' '}
+        {data ? `${total}${capped ? '+' : ''} upcoming ${total === 1 ? 'event' : 'events'}` : ' '}
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <form role="search" className="relative flex-1" onSubmit={(e) => e.preventDefault()}>
@@ -241,7 +243,7 @@ export function Component() {
           </Button>
         </div>
       )}
-      {data && total > 0 && !list.hasNextPage && <ListEnd total={total} />}
+      {data && total > 0 && !list.hasNextPage && <ListEnd total={total} capped={capped} />}
       <LoadMoreSentinel
         onVisible={() => list.fetchNextPage()}
         disabled={!list.hasNextPage || list.isFetching || isError}
@@ -251,7 +253,7 @@ export function Component() {
 }
 
 /** Closing state once every page is on screen. */
-function ListEnd({ total }: { total: number }) {
+function ListEnd({ total, capped }: { total: number; capped: boolean }) {
   return (
     <div className="mt-14 flex flex-col items-center text-center">
       <div className="flex w-full items-center gap-4">
@@ -259,10 +261,13 @@ function ListEnd({ total }: { total: number }) {
         <img src="/images/brand/mark.webp" alt="" className="size-10" />
         <span className="h-px flex-1 bg-linear-to-l from-transparent to-border" />
       </div>
-      <p className="mt-4 font-semibold">You've seen everything</p>
+      <p className="mt-4 font-semibold">
+        {capped ? `That's your top ${total}` : "You've seen everything"}
+      </p>
       <p className="text-muted-foreground mt-1 text-sm">
-        {total === 1 ? 'That was the only event' : `That's all ${total} events`}. New ones are added
-        all the time.
+        {capped
+          ? 'Sort by Soonest or Popular to browse every event.'
+          : `${total === 1 ? 'That was the only event' : `That's all ${total} events`}. New ones are added all the time.`}
       </p>
       <Button
         variant="ghost"

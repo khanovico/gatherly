@@ -4,7 +4,7 @@ import type { userProfiles } from '../db/schema';
 export type Point = { lat: number; lng: number };
 export type ViewerProfile = typeof userProfiles.$inferSelect;
 
-const EARTH_RADIUS_KM = 6371;
+export const EARTH_RADIUS_KM = 6371;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
 /** Great-circle (haversine) distance. */

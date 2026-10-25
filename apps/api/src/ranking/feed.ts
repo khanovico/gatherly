@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type { EventFeed, EventListQuery, EventSummary, SortOrder } from '@gatherly/shared';
+import type { EventFeed, EventListQuery, EventSummary } from '@gatherly/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { userProfiles } from '../db/schema';
 import type { AuthUser } from '../lib/auth';
-import { loadCandidates, type Candidate } from './candidates';
+import { loadCandidates, POOL_LIMIT, type Candidate } from './candidates';
 import { distanceKm, resolveOrigin, type Point, type ViewerProfile } from './geo';
 import type { Located, Ranked } from './ranker';
-import { popularity, ranker } from './rule-based';
+import { ranker } from './rule-based';
 
 export type Viewer = { id: string; profile: ViewerProfile | null } | null;
 
@@ -24,12 +24,6 @@ export const locate = (candidates: Candidate[], origin: Point | null): Located[]
     return { ...c, distanceKm: km === undefined ? undefined : Math.round(km * 10) / 10 };
   });
 
-const comparators: Record<Exclude<SortOrder, 'for_you'>, (a: Located, b: Located) => number> = {
-  soonest: (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
-  nearest: (a, b) => (a.distanceKm ?? Number.MAX_VALUE) - (b.distanceKm ?? Number.MAX_VALUE),
-  popular: (a, b) => popularity(b) - popularity(a),
-};
-
 export const toSummary = (viewer: Viewer, c: Ranked): EventSummary => ({
   ...c,
   startsAt: c.startsAt.toISOString(),
@@ -37,33 +31,40 @@ export const toSummary = (viewer: Viewer, c: Ranked): EventSummary => ({
   saved: viewer ? c.saved : undefined,
 });
 
-/** `GET /events`: filter in SQL, then rank (or sort) and page the pool in memory. */
+/**
+ * `GET /events`. `for_you` ranks the capped pool (see POOL_LIMIT) and pages it in memory; every
+ * other sort filters, orders and pages in SQL. Each item carries the ranker's reasons either way.
+ */
 export const buildFeed = async (
   db: Db,
   query: EventListQuery,
   user: AuthUser | null,
 ): Promise<EventFeed> => {
-  const { page, pageSize, radiusKm } = query;
+  const { page, pageSize } = query;
   const viewer = await loadViewer(db, user);
   const profile = viewer?.profile ?? null;
   const origin = resolveOrigin(query, profile);
   const sort = query.sort ?? (profile?.onboardedAt ? 'for_you' : 'popular');
-  const pool = await loadCandidates(db, {
-    ...query,
-    viewerId: viewer?.id,
-    recommend: sort === 'for_you',
-  });
-  let located = locate(pool, origin);
-  // A radius means "in person, within reach": online events have no distance and drop out.
-  if (radiusKm && origin) located = located.filter((c) => (c.distanceKm ?? Infinity) <= radiusKm);
-  // Every sort carries the ranker's reasons; only for_you keeps its order.
-  const items = ranker.rank(located, { profile, now: new Date() });
-  if (sort !== 'for_you') items.sort(comparators[sort]);
+  const filters = { ...query, viewerId: viewer?.id, origin };
+  const ctx = { profile, now: new Date() };
+  let feed: { items: Ranked[]; total: number; totalCapped: boolean };
+  if (sort === 'for_you') {
+    const pool = await loadCandidates(db, { ...filters, recommend: true });
+    const ranked = ranker.rank(locate(pool, origin), ctx);
+    const items = ranked.slice((page - 1) * pageSize, page * pageSize);
+    feed = { items, total: ranked.length, totalCapped: pool.length === POOL_LIMIT };
+  } else {
+    const rows = await loadCandidates(db, filters, { sort, page, pageSize });
+    // The ranker only explains here: the page keeps its SQL order.
+    const explained = new Map(ranker.rank(locate(rows, origin), ctx).map((r) => [r.id, r]));
+    const total = rows[0]?.total ?? 0;
+    feed = { items: rows.map((r) => explained.get(r.id)!), total, totalCapped: false };
+  }
   return {
-    items: items.slice((page - 1) * pageSize, page * pageSize).map((c) => toSummary(viewer, c)),
+    ...feed,
+    items: feed.items.map((c) => toSummary(viewer, c)),
     page,
     pageSize,
-    total: items.length,
     rankerVersion: ranker.version,
     requestId: randomUUID(),
   };

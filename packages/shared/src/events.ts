@@ -138,6 +138,8 @@ export type EventSummary = z.infer<typeof eventSummary>;
 
 /** `GET /events`: a page, plus what ordered it. Clients echo both on interactions. */
 export const eventFeed = paginated(eventSummary).extend({
+  /** `for_you` ranks at most 500 matches; true when it hit that cap, so `total` is a floor. */
+  totalCapped: z.boolean().optional(),
   rankerVersion: z.string().optional(),
   requestId: z.string().optional(),
 });
