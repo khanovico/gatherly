@@ -160,6 +160,9 @@ export const events = pgTable(
       'events_registered_count_within_capacity',
       sql`${t.registeredCount} >= 0 and ${t.registeredCount} <= ${t.capacity}`,
     ),
+    check('events_capacity_positive', sql`${t.capacity} > 0`),
+    check('events_ends_after_starts', sql`${t.endsAt} > ${t.startsAt}`),
+    check('events_price_non_negative', sql`${t.priceCents} >= 0`),
   ],
 );
 
