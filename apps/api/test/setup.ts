@@ -46,7 +46,12 @@ export const signedInMember = async (db: Db) => {
   return { userId: user!.id, cookie: `gatherly_session=${token}` };
 };
 
-export const createEvent = async (db: Db, organizerId: string, capacity: number) => {
+export const createEvent = async (
+  db: Db,
+  organizerId: string,
+  capacity: number,
+  overrides: Partial<typeof events.$inferInsert> = {},
+) => {
   const startsAt = new Date(Date.now() + 7 * DAY_MS);
   const [event] = await db
     .insert(events)
@@ -62,6 +67,7 @@ export const createEvent = async (db: Db, organizerId: string, capacity: number)
       timezone: 'America/New_York',
       capacity,
       coverImage: '/images/covers/tech-1.webp',
+      ...overrides,
     })
     .returning();
   return event!;
