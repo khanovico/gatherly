@@ -1,6 +1,7 @@
 import { hash, verify } from '@node-rs/argon2';
 import { Persona, me, signinInput, signupInput, userSummary } from '@gatherly/shared';
 import { eq, inArray } from 'drizzle-orm';
+import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { config } from '../../config';
@@ -13,6 +14,9 @@ import { requireUser } from '../../lib/guards';
 import { rateLimit } from '../../lib/rate-limit';
 
 const personaCard = z.object({ persona: Persona, user: userSummary });
+
+const MINUTE_MS = 60 * 1000;
+const bodyEmail = (request: FastifyRequest) => (request.body as { email: string }).email;
 
 // @node-rs/argon2 defaults to argon2id with OWASP-level cost.
 const hashPassword = (password: string) => hash(password);
@@ -39,7 +43,10 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
   if (config.DEMO_MODE) {
     app.post(
       '/auth/demo-login',
-      { schema: { body: z.object({ persona: Persona }), response: { 200: me } } },
+      {
+        onRequest: rateLimit({ max: 60, windowMs: 15 * MINUTE_MS }),
+        schema: { body: z.object({ persona: Persona }), response: { 200: me } },
+      },
       async (request, reply) => {
         const [row] = await app.db
           .select({ id: users.id })
@@ -56,7 +63,8 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/signup',
     {
-      onRequest: rateLimit({ max: 10, windowMs: 60 * 60 * 1000 }),
+      // 409 EMAIL_TAKEN tells whether an email has an account; the IP limit keeps that slow.
+      onRequest: rateLimit({ max: 10, windowMs: 60 * MINUTE_MS }),
       schema: { body: signupInput, response: { 200: me } },
     },
     async (request, reply) => {
@@ -84,7 +92,9 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/signin',
     {
-      onRequest: rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }),
+      onRequest: rateLimit({ max: 10, windowMs: 15 * MINUTE_MS }),
+      // Per account too, so guessing one password from many IPs stays slow.
+      preHandler: rateLimit({ max: 10, windowMs: 15 * MINUTE_MS, key: bodyEmail }),
       schema: { body: signinInput, response: { 200: me } },
     },
     async (request, reply) => {

@@ -39,3 +39,27 @@ it('signs up, signs in with the password, and rejects bad or duplicate credentia
   expect(signin.statusCode).toBe(200);
   expect(signin.headers['set-cookie']).toContain('gatherly_session=');
 });
+
+it('limits sign-in per account across IPs and ignores a forged X-Forwarded-For', async () => {
+  const attempt = (email: string, from: { remoteAddress: string; forwardedFor?: string }) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/signin',
+      remoteAddress: from.remoteAddress,
+      headers: from.forwardedFor ? { 'x-forwarded-for': from.forwardedFor } : {},
+      payload: { email, password: 'wrong horse' },
+    });
+
+  const target = `${randomUUID()}@test.gatherly`;
+  for (let i = 1; i <= 10; i++) await attempt(target, { remoteAddress: `10.1.0.${i}` });
+  expect((await attempt(target, { remoteAddress: '10.1.0.11' })).statusCode).toBe(429);
+
+  for (let i = 1; i <= 10; i++) {
+    await attempt(`${randomUUID()}@test.gatherly`, { remoteAddress: '10.2.0.1' });
+  }
+  const forged = await attempt(`${randomUUID()}@test.gatherly`, {
+    remoteAddress: '10.2.0.1',
+    forwardedFor: '203.0.113.7',
+  });
+  expect(forged.statusCode).toBe(429);
+});

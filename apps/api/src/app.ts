@@ -52,7 +52,8 @@ export async function buildApp(opts: { db?: Db } = {}) {
     },
     // Request lines come from registerRequestLogging instead.
     logController: new LogController({ disableRequestLogging: true }),
-    trustProxy: true,
+    // Trust only the last TRUST_PROXY_HOPS X-Forwarded-For entries: the ones our own proxies appended.
+    trustProxy: (_address, hop) => hop < config.TRUST_PROXY_HOPS,
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
