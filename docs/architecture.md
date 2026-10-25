@@ -111,7 +111,7 @@ flowchart TB
 
 ## 3. Request flow: register with capacity
 
-Registration is the one write path where correctness matters most: two people must never get the last seat. The API does it in a single transaction with one conditional update, so Postgres, not application code, decides who wins.
+Registration is the one write path where correctness matters most: two people must never get the last seat. The API does it in a single transaction: a locking conditional read of the event row, then the insert. Postgres, not application code, decides who wins, and a database trigger keeps the seat counter equal to the registration rows.
 
 ```mermaid
 sequenceDiagram
@@ -126,10 +126,11 @@ sequenceDiagram
   W->>API: POST /api/v1/events/{id}/registrations with cookie and traceparent
   API->>DB: Load session and user
   API->>API: Guards: signed in, not suspended
-  API->>DB: BEGIN
-  API->>DB: UPDATE events SET registered_count = registered_count + 1 WHERE published, below capacity and not started
-  alt one row updated (seat taken)
+  API->>DB: BEGIN, SET LOCAL lock_timeout
+  API->>DB: SELECT event FOR UPDATE WHERE published, registered_count < capacity, starts_at > now()
+  alt one row locked (seat available)
     API->>DB: INSERT registration with status confirmed
+    Note over DB: trigger: registered_count + 1
     alt partial unique index violated
       API->>DB: ROLLBACK (seat returned)
       API-->>W: 409 ALREADY_REGISTERED
@@ -137,14 +138,20 @@ sequenceDiagram
       API->>DB: COMMIT
       API-->>W: 201 Created with registration
     end
-  else no row updated
-    API->>DB: ROLLBACK, then read event to explain why
+  else no row matched
+    API->>DB: read event to explain why, ROLLBACK
     API-->>W: 404 NOT_FOUND, 409 EVENT_FULL, EVENT_STARTED or EVENT_CANCELLED
+  else lock not granted within the timeout
+    API-->>W: 503 EVENT_BUSY (retry)
   end
   W->>W: Keep or roll back optimistic state, show toast
 ```
 
-**Why it cannot overbook.** The conditional update takes a row lock on the event. A second request for the same event waits on that lock; when the first commits, Postgres re-checks the second request's condition against the new row, sees no seat left, and updates nothing. A check constraint (`registered_count <= capacity`) is a second line of defense. An automated test fires 25 parallel registrations at a 10-seat event and asserts exactly 10 succeed.
+**Why it cannot overbook.** The locking read (`SELECT … FOR UPDATE`) takes the event's row lock. A second request for the same event waits on that lock; when the first commits, Postgres re-checks the second request's conditions against the new row, sees no seat left, and returns nothing. A check constraint (`registered_count <= capacity`) is a second line of defense. An automated test fires 25 parallel registrations at a 10-seat event and asserts exactly 10 succeed.
+
+**Why the counter cannot drift.** The registration row is the seat. A trigger on `registrations` moves `events.registered_count` on every insert, status change and delete of a seat-holding row, so no handler, cascade (a deleted member's registrations) or manual fix can leave the two apart. `GET /admin/integrity/seats` lists any event where they differ; the tests assert it is empty after concurrent register-and-cancel load.
+
+**Why one hot event cannot stall the platform.** Register and cancel run with a `lock_timeout` (`SEAT_LOCK_TIMEOUT_MS`, 3 s by default). A request that cannot get the row in time answers `503 EVENT_BUSY` and the client retries, instead of holding a pool connection in a queue behind thousands of others.
 
 ```mermaid
 sequenceDiagram
@@ -152,18 +159,18 @@ sequenceDiagram
   participant B as Request B
   participant DB as Postgres (event row, 9 of 10 taken)
 
-  A->>DB: Conditional update (seat available?)
-  B->>DB: Conditional update (seat available?)
+  A->>DB: Locking read (seat available?)
+  B->>DB: Locking read (seat available?)
   Note over DB: A holds the row lock, B waits
-  DB-->>A: 1 row updated, count is 10
-  A->>DB: Insert registration, COMMIT
+  DB-->>A: 1 row, locked
+  A->>DB: Insert registration (trigger: count is 10), COMMIT
   Note over DB: B re-checks against the committed row
-  DB-->>B: 0 rows updated
+  DB-->>B: 0 rows
   B->>DB: Read event, ROLLBACK
   Note over B: Responds 409 EVENT_FULL
 ```
 
-**Cancel** runs the mirror image in one transaction: set the registration to `cancelled` (soft delete, keeps history) and decrement the counter. Register and cancel lock the event row before the registration row, always in that order, so a register and a cancel racing on the same event cannot deadlock. Re-registering after a cancel creates a new row, which the partial unique index allows because it only covers active statuses.
+**Cancel** runs the mirror image in one transaction: lock the event row, set the registration to `cancelled` (soft delete, keeps history), and the trigger decrements the counter. Register and cancel lock the event row before the registration row, always in that order, so a register and a cancel racing on the same event cannot deadlock. Re-registering after a cancel creates a new row, which the partial unique index allows because it only covers active statuses. Every "has it started" check (register, cancel, edit, cancel event) is `starts_at <= now()` evaluated in Postgres, so API instances with skewed clocks agree.
 
 ## 4. Data model
 
@@ -288,7 +295,7 @@ Events also carry presentation fields (summary, description, venue, city, online
 
 | Design choice | Why | Tradeoff |
 |---|---|---|
-| Denormalized `registered_count` on events | Capacity check is one indexed row update instead of a count over registrations under lock | Counter could drift from rows; prevented by updating both in one transaction, guarded by a check constraint |
+| Denormalized `registered_count` on events, maintained by a trigger on `registrations` | Capacity check is one indexed row lock instead of a count over registrations; the counter cannot drift because the database, not each code path, moves it | A trigger is logic that lives in a migration, so it is documented in [ADR 0006](adr/0006-capacity-concurrency.md) and checked by `/admin/integrity/seats` |
 | Partial unique index on `(event_id, user_id)` for `pending_payment` and `confirmed` only | Blocks double registration at the database, yet allows re-registering after a cancel | Uniqueness rule lives in the schema, so it must be documented (here) |
 | Soft cancel (status plus `cancelled_at`) | Keeps history for organizers, analytics and later refunds | Queries must filter by status |
 | Times stored in UTC plus the event's IANA timezone | Correct ordering and filtering; the event's local time is shown even across DST changes | Two values to keep consistent; validated on write |

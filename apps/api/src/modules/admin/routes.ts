@@ -19,10 +19,17 @@ import { DEMO_EMAIL_DOMAIN, isReadOnlyAccount, visibleEmail } from '../../lib/de
 import { AppError } from '../../lib/errors';
 import { requireAdmin } from '../../lib/guards';
 import { currentTraceId } from '../../lib/request-telemetry';
+import { seatDrift } from '../registrations/seats';
 
 const params = z.object({ id: z.uuid() });
 const userListQuery = eventListQuery.pick({ q: true, page: true, pageSize: true });
 const eventAdminQuery = userListQuery.extend({ status: EventStatus.optional() });
+
+const seatDriftRow = z.object({
+  eventId: z.uuid(),
+  registeredCount: z.int(),
+  activeRegistrations: z.int(),
+});
 
 const likePattern = (q?: string) => q && `%${q.replace(/[\\%_]/g, '\\$&')}%`;
 
@@ -219,6 +226,14 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       }));
       return { items, page, pageSize, total };
     },
+  );
+
+  // Events whose seat counter disagrees with their registration rows. Expected empty: the
+  // database trigger keeps them equal. A non-empty answer is a bug report, not a state to fix by hand.
+  app.get(
+    '/admin/integrity/seats',
+    { schema: { response: { 200: z.object({ drift: z.array(seatDriftRow) }) } } },
+    async () => ({ drift: await seatDrift(app.db) }),
   );
 
   if (config.DEMO_MODE) {

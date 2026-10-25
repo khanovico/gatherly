@@ -91,6 +91,20 @@ export const createEvent = async (
   return event!;
 };
 
+/** Fills `count` seats with fresh members. The seat trigger moves the counter; tests never set it. */
+export const fillSeats = async (db: Db, eventId: string, count: number) => {
+  const members = await db
+    .insert(users)
+    .values(
+      Array.from({ length: count }, () => ({
+        email: `${randomUUID()}@test.gatherly`,
+        name: 'Seat Filler',
+      })),
+    )
+    .returning({ id: users.id });
+  await db.insert(registrations).values(members.map((m) => ({ eventId, userId: m.id })));
+};
+
 /** The event's counter next to the confirmed rows it must always match. */
 export const seatCounts = async (db: Db, eventId: string) => {
   const [event] = await db

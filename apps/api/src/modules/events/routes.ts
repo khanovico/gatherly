@@ -7,7 +7,7 @@ import {
   type CreateEventInput,
   type EventDetail,
 } from '@gatherly/shared';
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, lte, sql } from 'drizzle-orm';
 import type { FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import { AppError } from '../../lib/errors';
 import { businessMetrics } from '../../lib/metrics';
 import { assertCanManage, requireEntitlement, requireUser } from '../../lib/guards';
 import { buildFeed } from '../../ranking/feed';
-import { ACTIVE_STATUSES } from '../registrations/seats';
+import { ACTIVE_STATUSES, eventStarted } from '../registrations/seats';
 
 type EventRow = typeof events.$inferSelect;
 
@@ -47,8 +47,12 @@ const toColumns = ({ coverImage, ...input }: CreateEventInput) => {
 };
 
 const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
+  // `started` comes from the database clock, the same one registration and cancellation use.
   const findEvent = async (id: string) => {
-    const [row] = await app.db.select().from(events).where(eq(events.id, id));
+    const [row] = await app.db
+      .select({ ...getTableColumns(events), started: eventStarted })
+      .from(events)
+      .where(eq(events.id, id));
     if (!row) throw new AppError('NOT_FOUND', 404, 'Event not found');
     return row;
   };
@@ -135,12 +139,14 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
       if (stored.status === 'cancelled') {
         throw new AppError('EVENT_CANCELLED', 409, 'Cancelled events cannot be edited');
       }
-      if (stored.startsAt <= new Date()) {
+      if (stored.started) {
         throw new AppError('EVENT_STARTED', 409, 'Events cannot be edited once they start');
       }
       // Re-check the whole event, so a patch cannot break rules that span fields.
+      const { started, ...storedColumns } = stored;
+      void started;
       const current = Object.fromEntries(
-        Object.entries(withIsoDates(stored)).filter(([, value]) => value !== null),
+        Object.entries(withIsoDates(storedColumns)).filter(([, value]) => value !== null),
       );
       const columns = toColumns(createEventInput.parse({ ...current, ...request.body }));
       // Conditional update: a registration landing after the read cannot push capacity below the count.
@@ -168,25 +174,31 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
       if (stored.status === 'cancelled') {
         throw new AppError('EVENT_CANCELLED', 409, 'This event is already cancelled');
       }
-      if (stored.startsAt <= new Date()) {
+      if (stored.started) {
         throw new AppError('EVENT_STARTED', 409, 'Events cannot be cancelled once they start');
       }
       // Event row first, then its registrations: the same lock order as registering.
       const event = await app.db.transaction(async (tx) => {
         const [row] = await tx
           .update(events)
-          .set({ status: 'cancelled', registeredCount: 0 })
+          .set({ status: 'cancelled' })
           .where(and(eq(events.id, stored.id), eq(events.status, 'published')))
-          .returning();
+          .returning({ id: events.id });
         // Another request cancelled it after the read above.
         if (!row) throw new AppError('EVENT_CANCELLED', 409, 'This event is already cancelled');
+        // Cancelling the rows releases their seats through the trigger; the counter ends at zero.
         await tx
           .update(registrations)
-          .set({ status: 'cancelled', cancelledAt: new Date() })
+          .set({ status: 'cancelled', cancelledAt: sql`now()` })
           .where(
             and(eq(registrations.eventId, row.id), inArray(registrations.status, ACTIVE_STATUSES)),
           );
-        return row;
+        // Read back inside the transaction, so the response carries the released count.
+        const [cancelled] = await tx
+          .select({ ...getTableColumns(events), started: eventStarted })
+          .from(events)
+          .where(eq(events.id, row.id));
+        return cancelled!;
       });
       return loadDetail(event, request.user);
     },

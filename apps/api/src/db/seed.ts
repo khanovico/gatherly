@@ -123,9 +123,9 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
       .slice(0, going)
       .map((m) => m.id);
     if (alex) attendeeIds.push(idOf.get(PERSONAS.attendee.name)!);
-    // Cancelling an event releases every seat (its sign-ups are kept as cancelled below).
-    const registeredCount = event.status === 'cancelled' ? 0 : attendeeIds.length;
-    return { event: { ...event, registeredCount }, attendeeIds };
+    // The seat trigger fills registered_count from the sign-ups inserted below (none for a
+    // cancelled event: its sign-ups are inserted already cancelled).
+    return { event, attendeeIds };
   });
 
   const rows = await tx
@@ -180,15 +180,11 @@ export const resetDemo = async (db: Db) => {
       .from(users)
       .where(like(users.email, `%${DEMO_EMAIL_DOMAIN}`));
     await tx.delete(events).where(inArray(events.organizerId, demoUsers)); // cascades to registrations
-    // Cascades to sessions, subscriptions.
+    // Cascades to sessions, subscriptions and registrations; the seat trigger releases the seats
+    // the deleted members held on events real accounts host.
     await tx
       .delete(users)
       .where(and(eq(users.isProtected, false), like(users.email, `%${DEMO_EMAIL_DOMAIN}`)));
-    // Events left are hosted by real accounts: drop the seats the deleted members held there.
-    await tx.execute(sql`
-      update ${events} e set registered_count = (
-        select count(*) from ${registrations} r
-        where r.event_id = e.id and r.status in ('pending_payment', 'confirmed'))`);
     await insertDemoContent(tx, new Date());
   });
 };

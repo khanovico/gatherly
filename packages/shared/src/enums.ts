@@ -98,6 +98,7 @@ export const ErrorCode = z.enum([
   'ACCOUNT_SUSPENDED',
   'NOT_FOUND',
   'EVENT_FULL',
+  'EVENT_BUSY',
   'EVENT_STARTED',
   'EVENT_CANCELLED',
   'ALREADY_REGISTERED',

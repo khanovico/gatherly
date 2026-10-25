@@ -38,7 +38,7 @@ it('keeps real accounts private, read-only and out of the demo reset', async () 
 it('lets the demo admin view but not change events that real accounts host', async () => {
   const host = await signedInMember(ctx.db);
   const guest = await signedInMember(ctx.db);
-  const event = await createEvent(ctx.db, host.userId, 10, { registeredCount: 1 });
+  const event = await createEvent(ctx.db, host.userId, 10);
   const [seat] = await ctx.db
     .insert(registrations)
     .values({ eventId: event.id, userId: guest.userId })

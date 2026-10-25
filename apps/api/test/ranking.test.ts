@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NEIGHBORHOODS } from '@gatherly/shared';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { eventHides, registrations, userProfiles } from '../src/db/schema';
-import { createEvent, signedInMember, startApp } from './setup';
+import { createEvent, fillSeats, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
 beforeAll(async () => {
@@ -32,8 +32,10 @@ it('ranks interest and distance above generic popularity, and never shows exclud
     lat,
     lng,
   });
-  const popularTalk = await event({ registeredCount: 45 });
-  await event({ registeredCount: 50 }); // full
+  const popularTalk = await event();
+  await fillSeats(db, popularTalk.id, 45);
+  const full = await event();
+  await fillSeats(db, full.id, 50);
   await event({}, viewer.userId); // the viewer's own
   const [hidden, registered] = [await event(), await event()];
   await db.insert(eventHides).values({ userId: viewer.userId, eventId: hidden.id });

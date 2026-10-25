@@ -32,6 +32,7 @@ import { businessMetrics } from '../../lib/metrics';
 import {
   ACTIVE_STATUSES,
   releaseSeat,
+  seatTransaction,
   toEventSummary,
   toRegistration,
 } from '../registrations/seats';
@@ -158,7 +159,7 @@ const organizerRoutes: FastifyPluginAsyncZod = async (app) => {
         .where(eq(registrations.id, request.params.id));
       if (!found) throw new AppError('NOT_FOUND', 404, 'Registration not found');
       assertCanManage(user, found);
-      const { registration: row } = await app.db.transaction((tx) =>
+      const { registration: row } = await seatTransaction(app.db, (tx) =>
         releaseSeat(tx, eq(registrations.id, request.params.id)),
       );
       businessMetrics.cancellation();
