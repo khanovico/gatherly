@@ -1,5 +1,6 @@
 import { NEIGHBORHOODS, type TimeSlot } from '@gatherly/shared';
 import { distanceKm } from '../ranking/geo';
+import { timeOfWeek } from '../ranking/rule-based';
 import type { events } from './schema';
 import type { SeedMember } from './seed-members';
 import type { Random } from './seed-random';
@@ -10,17 +11,12 @@ export type AffinityEvent = Pick<
   'category' | 'format' | 'tags' | 'lat' | 'lng' | 'startsAt' | 'timezone'
 >;
 
-/** Weekday daytime, weeknight (from 17:00) or weekend, in the event's own timezone. */
-export const timeSlotOf = ({ startsAt, timezone }: AffinityEvent): TimeSlot => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    weekday: 'short',
-    hour: 'numeric',
-    hourCycle: 'h23',
-  }).formatToParts(startsAt);
-  const part = (type: string) => parts.find((p) => p.type === type)!.value;
-  if (['Sat', 'Sun'].includes(part('weekday'))) return 'weekends';
-  return Number(part('hour')) >= 17 ? 'weeknights' : 'weekday_daytime';
+// Formatting dates in a time zone is slow; each event is scored once per member.
+const slots = new WeakMap<AffinityEvent, TimeSlot>();
+const slotOf = (event: AffinityEvent) => {
+  const slot = slots.get(event) ?? timeOfWeek(event.startsAt, event.timezone).slot;
+  slots.set(event, slot);
+  return slot;
 };
 
 const homeOf = (profile: Profile) =>
@@ -38,7 +34,7 @@ export const affinity = (profile: Profile | null, event: AffinityEvent, random: 
   if (!profile.formats.includes(event.format)) return -Infinity;
   if (profile.interests.includes(event.category)) score += 3;
   score += event.tags.filter((t) => profile.tags.includes(t)).length;
-  if (profile.timeSlots.includes(timeSlotOf(event))) score += 1;
+  if (profile.timeSlots.includes(slotOf(event))) score += 1;
   if (event.lat !== null && event.lng !== null) {
     const km = distanceKm(homeOf(profile), { lat: event.lat, lng: event.lng });
     score += km <= profile.radiusKm ? 2 * (1 - km / profile.radiusKm) : -2;

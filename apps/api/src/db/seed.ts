@@ -3,7 +3,17 @@ import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import type { Persona } from '@gatherly/shared';
 import { PERSONAS, ensurePersonas } from './personas';
-import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
+import {
+  eventSaves,
+  events,
+  interactions,
+  plans,
+  registrations,
+  subscriptions,
+  userProfiles,
+  users,
+} from './schema';
+import { planInteractions, planSaves } from './seed-activity';
 import { DEMO_EVENTS, type DemoEvent } from './seed-data';
 import { HOSTS, PERSONA_PROFILES, generateMembers } from './seed-members';
 import { affinity } from './seed-affinity';
@@ -119,17 +129,32 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     .insert(events)
     .values(planned.map((p) => p.event))
     .returning({ id: events.id });
-  await tx.insert(registrations).values(
-    planned.flatMap(({ event, attendeeIds }, i) => {
-      // Sign-ups spread from publication until now, or until the start for past events.
-      const window = Math.min(+now, +event.startsAt) - +event.createdAt;
-      return attendeeIds.map((userId) => ({
-        eventId: rows[i]!.id,
-        userId,
-        createdAt: new Date(+event.createdAt + random.next() * window),
-      }));
-    }),
-  );
+  const seeded = planned.map(({ event }, i) => ({
+    ...event,
+    id: rows[i]!.id,
+    status: event.status ?? 'published',
+  }));
+  const signups = seeded.flatMap((event, i) => {
+    // Sign-ups spread from publication until now, or until the start for past events.
+    const window = Math.min(+now, +event.startsAt) - +event.createdAt;
+    return planned[i]!.attendeeIds.map((userId) => ({
+      eventId: event.id,
+      userId,
+      createdAt: new Date(+event.createdAt + random.next() * window),
+    }));
+  });
+  await tx.insert(registrations).values(signups);
+
+  const alex = { id: idOf.get(PERSONAS.attendee.name)!, saves: 3 };
+  const people = [...crowd, { ...alex, profile: PERSONA_PROFILES.attendee.profile }];
+  const going = new Set(signups.map((r) => `${r.userId}:${r.eventId}`));
+  const saves = planSaves(random, now, people, seeded, going);
+  await tx.insert(eventSaves).values(saves);
+  const activity = planInteractions(random, now, people, seeded, { registrations: signups, saves });
+  // Postgres caps one statement at 65,535 parameters.
+  for (let i = 0; i < activity.length; i += 5_000) {
+    await tx.insert(interactions).values(activity.slice(i, i + 5_000));
+  }
 };
 
 /** Wipes every event and non-persona user, then reseeds with dates relative to now. */

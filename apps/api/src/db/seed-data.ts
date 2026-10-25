@@ -214,7 +214,6 @@ export const DEMO_EVENTS: DemoEvent[] = [
     capacity: 25,
     cover: 1,
     going: 16,
-    organizer: 'Tomás Rivera',
   },
   {
     title: 'Golden Hour Street Photography Walk',
