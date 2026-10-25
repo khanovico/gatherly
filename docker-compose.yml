@@ -8,6 +8,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://gatherly:gatherly@db:5432/gatherly
+      DEMO_MODE: 'true'
     ports:
       - '${APP_PORT:-3000}:3000'
 

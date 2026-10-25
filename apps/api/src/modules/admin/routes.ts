@@ -12,6 +12,7 @@ import { and, asc, desc, eq, gt, ilike, inArray, or } from 'drizzle-orm';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { config } from '../../config';
 import { events, plans, registrations, subscriptions, users } from '../../db/schema';
 import { resetDemo } from '../../db/seed';
 import { AppError } from '../../lib/errors';
@@ -211,10 +212,12 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  app.post('/admin/demo/reset', async (_request, reply) => {
-    await resetDemo(app.db);
-    return reply.status(204).send();
-  });
+  if (config.DEMO_MODE) {
+    app.post('/admin/demo/reset', async (_request, reply) => {
+      await resetDemo(app.db);
+      return reply.status(204).send();
+    });
+  }
 
   // Lets reviewers see a real error travel to Sentry and Grafana. One per 10 s for the whole app.
   let lastDiagnosticAt = 0;

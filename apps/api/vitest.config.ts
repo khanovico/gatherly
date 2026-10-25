@@ -6,7 +6,11 @@ if (existsSync('../../.env')) process.loadEnvFile('../../.env');
 
 export default defineConfig({
   test: {
-    env: { DATABASE_URL: process.env.TEST_DATABASE_URL ?? '', LOG_LEVEL: 'silent' },
+    env: {
+      DATABASE_URL: process.env.TEST_DATABASE_URL ?? '',
+      LOG_LEVEL: 'silent',
+      DEMO_MODE: 'true',
+    },
     // Test files share one database.
     fileParallelism: false,
   },

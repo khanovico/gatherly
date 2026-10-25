@@ -1,7 +1,7 @@
 modules = ["nodejs-22"]
 
 # The Run button mirrors the published app: build the SPA + API, migrate, serve both from one port.
-run = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build && cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
+run = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build && cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
 
 [nix]
 channel = "stable-24_05"
@@ -11,7 +11,8 @@ deploymentTarget = "autoscale"
 # VITE_SENTRY_DSN must be set as a deployment secret: Vite inlines it into the web bundle at build time.
 build = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build"]
 # Migrations run before the server starts; the server itself never migrates.
-run = ["sh", "-c", "cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production exec node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
+# DEMO_MODE=true: this deployment is the public demo (persona sign-in, demo reset, boot seed).
+run = ["sh", "-c", "cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true exec node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
 
 [[ports]]
 localPort = 3000

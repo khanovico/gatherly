@@ -5,8 +5,10 @@ import { seedIfStale } from './db/seed';
 import { shutdownTelemetry } from './telemetry';
 
 const app = await buildApp();
-await ensurePersonas(app.db);
-if (await seedIfStale(app.db)) app.log.info('demo data seeded');
+if (config.DEMO_MODE) {
+  await ensurePersonas(app.db);
+  if (await seedIfStale(app.db)) app.log.info('demo data seeded');
+}
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, async () => {
