@@ -1,9 +1,10 @@
-import type { EventSummary } from '@gatherly/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { MyEvents, MyEventsQuery } from '@gatherly/shared';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { CalendarDays, Gauge, Plus, Ticket, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
+import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { OrganizerError } from '@/features/organizer/organizer-error';
 import { OrganizerEventRow } from '@/features/organizer/organizer-event-row';
 import { useMe } from '@/hooks/use-me';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, nextPage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 const createButton = (
@@ -22,14 +23,25 @@ const createButton = (
   </Button>
 );
 
+type Tab = MyEventsQuery['when'];
+const tabs: Tab[] = ['upcoming', 'past', 'cancelled'];
+
+function useMyEvents(when: Tab) {
+  return useInfiniteQuery({
+    queryKey: [...queryKeys.my.events, when],
+    queryFn: ({ pageParam }) =>
+      apiFetch<MyEvents>(`/me/events?when=${when}&page=${pageParam}&pageSize=20`),
+    initialPageParam: 1,
+    getNextPageParam: nextPage,
+  });
+}
+
 export function DashboardPage() {
   const { data: me } = useMe();
-  const events = useQuery({
-    queryKey: queryKeys.my.events,
-    queryFn: () => apiFetch<EventSummary[]>('/me/events'),
-  });
-  if (events.error) {
-    return <OrganizerError error={events.error} onRetry={() => void events.refetch()} />;
+  // The upcoming tab's first page also carries the stats for every tab.
+  const upcoming = useMyEvents('upcoming');
+  if (upcoming.error) {
+    return <OrganizerError error={upcoming.error} onRetry={() => void upcoming.refetch()} />;
   }
   return (
     <div className="page-container py-8 sm:py-12">
@@ -43,8 +55,8 @@ export function DashboardPage() {
         </div>
         {createButton}
       </header>
-      {events.data ? (
-        <Overview events={events.data} />
+      {upcoming.data ? (
+        <Overview first={upcoming.data.pages[0]!} />
       ) : (
         <Skeleton className="mt-8 h-96 rounded-xl" />
       )}
@@ -52,9 +64,9 @@ export function DashboardPage() {
   );
 }
 
-function Overview({ events }: { events: EventSummary[] }) {
-  const [now] = useState(Date.now);
-  if (events.length === 0) {
+function Overview({ first: { stats, items } }: { first: MyEvents }) {
+  const [tab, setTab] = useState<Tab>('upcoming');
+  if (stats.upcoming + stats.past + stats.cancelled === 0) {
     return (
       <Card className="mt-8">
         <IllustratedState
@@ -67,14 +79,7 @@ function Overview({ events }: { events: EventSummary[] }) {
       </Card>
     );
   }
-  const published = events.filter((e) => e.status === 'published');
-  const groups = {
-    upcoming: published.filter((e) => Date.parse(e.startsAt) > now),
-    past: published.filter((e) => Date.parse(e.startsAt) <= now).reverse(),
-    cancelled: events.filter((e) => e.status === 'cancelled'),
-  };
-  const registrations = published.reduce((sum, e) => sum + e.registeredCount, 0);
-  const fill = mean(groups.upcoming.map((e) => e.registeredCount / e.capacity));
+  const published = stats.upcoming + stats.past;
 
   return (
     <>
@@ -82,52 +87,60 @@ function Overview({ events }: { events: EventSummary[] }) {
         <StatTile
           icon={CalendarDays}
           label="Upcoming events"
-          value={String(groups.upcoming.length)}
-          caption={groups.upcoming[0] ? `Next: ${groups.upcoming[0].title}` : 'Nothing scheduled'}
+          value={String(stats.upcoming)}
+          caption={items[0] ? `Next: ${items[0].title}` : 'Nothing scheduled'}
         />
         <StatTile
           icon={Ticket}
           label="Total registrations"
-          value={registrations.toLocaleString()}
-          caption={`Across ${published.length} published ${published.length === 1 ? 'event' : 'events'}`}
+          value={stats.registrations.toLocaleString()}
+          caption={`Across ${published} published ${published === 1 ? 'event' : 'events'}`}
         />
         <StatTile
           icon={Gauge}
           label="Average fill rate"
-          value={fill === undefined ? '—' : `${Math.round(fill * 100)}%`}
+          value={stats.fillRate === null ? '—' : `${Math.round(stats.fillRate * 100)}%`}
           caption="Seats taken across upcoming events"
         />
       </section>
-      <Tabs defaultValue="upcoming" className="mt-10">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="mt-10">
         <TabsList variant="line" className="mb-4">
-          {Object.entries(groups).map(([key, list]) => (
+          {tabs.map((key) => (
             <TabsTrigger key={key} value={key} className="px-3 capitalize">
-              {key} <span className="text-muted-foreground tabular-nums">{list.length}</span>
+              {key} <span className="text-muted-foreground tabular-nums">{stats[key]}</span>
             </TabsTrigger>
           ))}
         </TabsList>
-        {Object.entries(groups).map(([key, list]) => (
-          <TabsContent key={key} value={key}>
-            <Card className="gap-0 py-0">
-              {list.length ? (
-                <ul className="divide-y">
-                  {list.map((event) => (
-                    <OrganizerEventRow key={event.id} event={event} ended={key === 'past'} />
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground p-10 text-center text-sm">No {key} events.</p>
-              )}
-            </Card>
-          </TabsContent>
-        ))}
+        <TabsContent value={tab}>
+          <EventList when={tab} />
+        </TabsContent>
       </Tabs>
     </>
   );
 }
 
-const mean = (values: number[]) =>
-  values.length ? values.reduce((a, b) => a + b, 0) / values.length : undefined;
+function EventList({ when }: { when: Tab }) {
+  const { data, isPending, isError, hasNextPage, isFetching, fetchNextPage } = useMyEvents(when);
+  const events = data?.pages.flatMap((page) => page.items) ?? [];
+  if (isPending) return <Skeleton className="h-60 rounded-xl" />;
+  return (
+    <Card className="gap-0 py-0">
+      {events.length ? (
+        <ul className="divide-y">
+          {events.map((event) => (
+            <OrganizerEventRow key={event.id} event={event} ended={when === 'past'} />
+          ))}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground p-10 text-center text-sm">No {when} events.</p>
+      )}
+      <LoadMoreSentinel
+        onVisible={() => void fetchNextPage()}
+        disabled={!hasNextPage || isFetching || isError}
+      />
+    </Card>
+  );
+}
 
 type StatTileProps = { icon: LucideIcon; label: string; value: string; caption: string };
 

@@ -33,6 +33,10 @@ export async function apiFetch<T>(path: string, { body, headers, ...init }: ApiI
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
+/** `getNextPageParam` for any paginated list: the next page while items remain. */
+export const nextPage = (last: { page: number; pageSize: number; total: number }) =>
+  last.page * last.pageSize < last.total ? last.page + 1 : undefined;
+
 const statusCodes: Record<number, ErrorCode> = {
   401: 'UNAUTHENTICATED',
   403: 'FORBIDDEN',

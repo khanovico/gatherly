@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TicketCard } from '@/features/registrations/ticket-card';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, nextPage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 const tabs = {
@@ -42,8 +42,7 @@ function MyTickets() {
     queryFn: ({ pageParam }) =>
       apiFetch<MyRegistrations>(`/me/registrations?when=${tab}&page=${pageParam}&pageSize=12`),
     initialPageParam: 1,
-    getNextPageParam: (last) =>
-      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    getNextPageParam: nextPage,
   });
   const counts = data?.pages[0]?.counts;
   const tickets = data?.pages.flatMap((page) => page.items) ?? [];

@@ -1,6 +1,6 @@
 import type { EventDetail, EventFeed, EventListQuery } from '@gatherly/shared';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, nextPage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 const fetchEvents = (query: Partial<EventListQuery>) => {
@@ -27,8 +27,7 @@ export function useInfiniteEvents(query: Omit<Partial<EventListQuery>, 'page'>) 
     queryKey: [...queryKeys.events.list(query), 'infinite'],
     queryFn: ({ pageParam }) => fetchEvents({ ...query, page: pageParam }),
     initialPageParam: 1,
-    getNextPageParam: (last) =>
-      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+    getNextPageParam: nextPage,
     placeholderData: keepPreviousData,
   });
 }

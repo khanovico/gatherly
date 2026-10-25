@@ -163,6 +163,27 @@ export const eventDetail = eventSummary.extend({
 });
 export type EventDetail = z.infer<typeof eventDetail>;
 
+export const myEventsQuery = pageQuery.extend({
+  when: z.enum(['upcoming', 'past', 'cancelled']).default('upcoming'),
+});
+export type MyEventsQuery = z.infer<typeof myEventsQuery>;
+
+/**
+ * `GET /me/events?when&page&pageSize`: one page of the organizer's events; upcoming soonest first,
+ * past most recent first. `stats` covers all of them: tab sizes, registrations across published
+ * events, and the mean fill rate of upcoming ones (null with none).
+ */
+export const myEvents = paginated(eventSummary).extend({
+  stats: z.object({
+    upcoming: z.int().min(0),
+    past: z.int().min(0),
+    cancelled: z.int().min(0),
+    registrations: z.int().min(0),
+    fillRate: z.number().min(0).nullable(),
+  }),
+});
+export type MyEvents = z.infer<typeof myEvents>;
+
 export const myRegistration = registration.extend({ event: eventSummary });
 export type MyRegistration = z.infer<typeof myRegistration>;
 

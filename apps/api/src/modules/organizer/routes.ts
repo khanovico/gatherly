@@ -1,5 +1,5 @@
-import { attendee, eventSummary, registration } from '@gatherly/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { attendee, myEvents, myEventsQuery, registration } from '@gatherly/shared';
+import { and, asc, desc, eq, gt, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { events, registrations, users } from '../../db/schema';
@@ -19,15 +19,50 @@ const params = z.object({ id: z.uuid() });
 const organizerRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/me/events',
-    { schema: { response: { 200: z.array(eventSummary) } } },
+    { schema: { querystring: myEventsQuery, response: { 200: myEvents } } },
     async (request) => {
       const user = requireUser(request);
-      const rows = await app.db
-        .select()
-        .from(events)
-        .where(eq(events.organizerId, user.id))
-        .orderBy(asc(events.startsAt));
-      return rows.map(toEventSummary);
+      const { when, page, pageSize } = request.query;
+      const now = new Date();
+      const published = eq(events.status, 'published');
+      const tabs: Record<typeof when, SQL> = {
+        upcoming: and(published, gt(events.startsAt, now))!,
+        past: and(published, lte(events.startsAt, now))!,
+        cancelled: eq(events.status, 'cancelled'),
+      };
+      const n = (where: SQL) => sql<number>`count(*) filter (where ${where})`.mapWith(Number);
+      const mine = eq(events.organizerId, user.id);
+      const [rows, [stats]] = await Promise.all([
+        app.db
+          .select()
+          .from(events)
+          .where(and(mine, tabs[when]))
+          .orderBy(when === 'past' ? desc(events.startsAt) : asc(events.startsAt), asc(events.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        app.db
+          .select({
+            upcoming: n(tabs.upcoming),
+            past: n(tabs.past),
+            cancelled: n(tabs.cancelled),
+            registrations:
+              sql<number>`coalesce(sum(${events.registeredCount}) filter (where ${published}), 0)`.mapWith(
+                Number,
+              ),
+            fillRate: sql<
+              number | null
+            >`avg(${events.registeredCount}::float / ${events.capacity}) filter (where ${tabs.upcoming})`,
+          })
+          .from(events)
+          .where(mine),
+      ]);
+      return {
+        items: rows.map(toEventSummary),
+        page,
+        pageSize,
+        total: stats![when],
+        stats: stats!,
+      };
     },
   );
 
