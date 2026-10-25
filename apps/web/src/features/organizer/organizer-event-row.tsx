@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CategoryBadge } from '@/features/events/category-badge';
 import { EventDateTime } from '@/features/events/event-date-time';
 import { SeatsMeter } from '@/features/events/seats-meter';
+import { EventActions } from '@/features/organizer/event-actions';
 
 export function OrganizerEventRow({ event, ended }: { event: EventSummary; ended: boolean }) {
   const cancelled = event.status === 'cancelled';
@@ -31,11 +32,14 @@ export function OrganizerEventRow({ event, ended }: { event: EventSummary; ended
         <EventDateTime event={event} compact />
       </div>
       <SeatsMeter seats={event} className="sm:w-44" />
-      <Button asChild variant="outline">
-        <Link to={`/organizer/events/${event.id}/attendees`}>
-          <Users /> Attendees
-        </Link>
-      </Button>
+      <div className="flex gap-2">
+        <Button asChild variant="outline">
+          <Link to={`/organizer/events/${event.id}/attendees`}>
+            <Users /> Attendees
+          </Link>
+        </Button>
+        {!cancelled && !ended && <EventActions event={event} />}
+      </div>
     </li>
   );
 }
