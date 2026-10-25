@@ -117,10 +117,8 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  app.get(
-    '/events/:id',
-    { schema: { params, response: { 200: eventDetail } } },
-    async (request) => loadDetail(await findEvent(request.params.id), request.user),
+  app.get('/events/:id', { schema: { params, response: { 200: eventDetail } } }, async (request) =>
+    loadDetail(await findEvent(request.params.id), request.user),
   );
 
   app.post(
