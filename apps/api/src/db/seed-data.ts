@@ -21,33 +21,9 @@ type DemoEvent = Pick<
   /** Background members registered; Alex comes on top when `alex` is set. */
   going: number;
   alex?: true;
-  /** A member name from DEMO_MEMBERS; defaults to Olivia. */
+  /** A name from HOSTS; defaults to Olivia. */
   organizer?: string;
 };
-
-/** Background members who fill attendee lists. Organizers among them get a Premium subscription. */
-export const DEMO_MEMBERS = [
-  'Daniel Okafor',
-  'Priya Raman',
-  'Lucas Ferreira',
-  'Hannah Schmidt',
-  'Marcus Johnson',
-  'Sofia Alvarez',
-  'Ethan Brooks',
-  'Aisha Khan',
-  'Noah Kim',
-  'Grace Liu',
-  'Tomás Rivera',
-  'Chloe Martin',
-  'Jamal Wright',
-  'Emma Larsen',
-  'Ravi Desai',
-  'Isabella Rossi',
-  'Owen Gallagher',
-  'Zoe Nakamura',
-  'Mateo García',
-  'Leah Cohen',
-];
 
 export const DEMO_EVENTS: DemoEvent[] = [
   {

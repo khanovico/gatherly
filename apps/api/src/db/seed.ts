@@ -1,8 +1,10 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { PERSONAS, ensurePersonas } from './personas';
-import { events, plans, registrations, subscriptions, users } from './schema';
-import { DEMO_EVENTS, DEMO_MEMBERS } from './seed-data';
+import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
+import { DEMO_EVENTS } from './seed-data';
+import { generateMembers } from './seed-members';
+import { createRandom } from './seed-random';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -10,6 +12,7 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 // Serializes resets across app instances booting at the same time.
 const SEED_LOCK = 802_611;
+const MEMBER_COUNT = 200;
 
 /** "Tomás Rivera" → "tomas.rivera@gatherly.demo" */
 const memberEmail = (name: string) =>
@@ -31,10 +34,19 @@ const localTime = (now: Date, days: number, at: string, timeZone: string) => {
 };
 
 const insertDemoContent = async (tx: Tx, now: Date) => {
+  const random = createRandom(20_261_026);
+  const seeds = generateMembers(random, now, MEMBER_COUNT);
   const members = await tx
     .insert(users)
-    .values(DEMO_MEMBERS.map((name) => ({ name, email: memberEmail(name) })))
+    .values(
+      seeds.map(({ profile: _, ...member }) => ({ ...member, email: memberEmail(member.name) })),
+    )
     .returning({ id: users.id, name: users.name });
+  await tx
+    .insert(userProfiles)
+    .values(
+      seeds.flatMap(({ profile }, i) => (profile ? [{ ...profile, userId: members[i]!.id }] : [])),
+    );
   const [premium] = await tx.select({ id: plans.id }).from(plans).where(eq(plans.code, 'premium'));
   const organizers = new Set(DEMO_EVENTS.map((e) => e.organizer));
   const organizerPlans = members
