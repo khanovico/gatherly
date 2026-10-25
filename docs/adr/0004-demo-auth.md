@@ -1,6 +1,6 @@
 # 0004. Demo persona sign-in with server-side sessions
 
-- **Status:** Accepted
+- **Status:** Accepted, amended by [0008](0008-password-signup.md) (real accounts with email and password; personas remain as demo accounts)
 - **Date:** 2026-10-25
 
 ## Context
