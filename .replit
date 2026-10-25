@@ -1,7 +1,7 @@
 modules = ["nodejs-22"]
 
 # The Run button mirrors the published app: build the SPA + API, migrate, serve both from one port.
-run = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build && cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true TRUST_PROXY_HOPS=1 node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
+run = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build && cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true TRUST_PROXY_HOPS=2 node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
 
 [nix]
 channel = "stable-24_05"
@@ -12,8 +12,8 @@ deploymentTarget = "autoscale"
 build = ["sh", "-c", "npx --yes pnpm@9.15.9 install --frozen-lockfile && npx --yes pnpm@9.15.9 build"]
 # Migrations run before the server starts; the server itself never migrates.
 # DEMO_MODE=true: this deployment is the public demo (persona sign-in, demo reset, boot seed).
-# TRUST_PROXY_HOPS=1: Replit's proxy is the only hop whose X-Forwarded-For entry is believed.
-run = ["sh", "-c", "cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true TRUST_PROXY_HOPS=1 exec node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
+# TRUST_PROXY_HOPS=2: Google's front end and Replit's proxy each add an X-Forwarded-For hop.
+run = ["sh", "-c", "cd apps/api && NODE_ENV=production node dist/migrate.js && NODE_ENV=production DEMO_MODE=true TRUST_PROXY_HOPS=2 exec node --enable-source-maps --import ./dist/telemetry.js dist/server.js"]
 
 [[ports]]
 localPort = 3000
