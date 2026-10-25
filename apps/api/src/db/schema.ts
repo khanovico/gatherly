@@ -155,7 +155,8 @@ export const events = pgTable(
     index('events_search_idx').using('gin', t.search),
     // Typo-tolerant title matching (pg_trgm, enabled by the migration).
     index('events_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
-    // Last line of defence against overbooking if a code path ever skips the conditional update.
+    // The `registrations_seat_count` trigger (migration 0003) keeps the counter equal to the
+    // active rows; this bounds it even so, as the last line of defence against overbooking.
     check(
       'events_registered_count_within_capacity',
       sql`${t.registeredCount} >= 0 and ${t.registeredCount} <= ${t.capacity}`,

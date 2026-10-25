@@ -6,7 +6,14 @@ import { events, registrations } from '../../db/schema';
 import { AppError } from '../../lib/errors';
 import { requireUser } from '../../lib/guards';
 import { businessMetrics } from '../../lib/metrics';
-import { ACTIVE_STATUSES, releaseSeat, takeSeat, toEventSummary, toRegistration } from './seats';
+import {
+  ACTIVE_STATUSES,
+  releaseSeat,
+  seatTransaction,
+  takeSeat,
+  toEventSummary,
+  toRegistration,
+} from './seats';
 
 const eventParams = z.object({ id: z.uuid() });
 
@@ -34,10 +41,10 @@ const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         eq(registrations.eventId, request.params.id),
         eq(registrations.userId, user.id),
       )!;
-      const row = await app.db.transaction(async (tx) => {
-        const { registration, startsAt } = await releaseSeat(tx, mine);
+      const row = await seatTransaction(app.db, async (tx) => {
+        const { registration, started } = await releaseSeat(tx, mine);
         // Throwing rolls the cancellation back.
-        if (startsAt <= new Date()) throw new AppError('EVENT_STARTED', 409);
+        if (started) throw new AppError('EVENT_STARTED', 409);
         return registration;
       });
       businessMetrics.cancellation();

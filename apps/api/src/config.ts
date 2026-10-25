@@ -12,6 +12,9 @@ const envSchema = z.object({
   // are believed; anything a client adds before them is ignored, so it cannot dodge rate limits.
   // Replit documents no client-IP header a client cannot forge, so the count is measured, not given.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
+  // How long a registration or cancellation waits for a busy event row before answering
+  // 503 EVENT_BUSY, so one very hot event cannot tie up the connection pool (ADR 0006).
+  SEAT_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
   // Public demo: persona sign-in, demo reset and the boot-time seed. Off means none of them exist.
   DEMO_MODE: z.stringbool().default(false),
   // Telemetry is off unless set. The OTel SDK also reads the OTEL_* values from the environment itself.

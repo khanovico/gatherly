@@ -114,7 +114,7 @@
     <text x="634" y="572" fill="#475569" font-size="12">entitlements per plan</text>
 
     <text x="40" y="604" fill="#14532d" font-size="12" font-weight="600">Capacity rule lives here:</text>
-    <text x="196" y="604" fill="#475569" font-size="12">one conditional UPDATE … WHERE registered_count &lt; capacity, then INSERT, in one transaction. Postgres picks the winner.</text>
+    <text x="196" y="604" fill="#475569" font-size="12">SELECT … FOR UPDATE WHERE registered_count &lt; capacity, then INSERT; a trigger keeps the counter equal to the rows.</text>
   </g>
 
   <!-- Arrows -->

@@ -50,7 +50,7 @@ The web app records an impression only when a card is actually on screen and sen
 |---|---|---|
 | Trigger | No self-service deletion; only a direct database delete | A "delete my account" request, handled by a job |
 | Profile, sessions, subscription, saves, hides, interactions | Deleted by foreign-key cascade | Same |
-| Registrations | Also deleted by cascade, which would leave `registered_count` too high on events with active seats | Active registrations cancelled first (seats freed in the same transaction), then the rows anonymized: the user reference moves to a tombstone so organizer history and counts stay correct |
+| Registrations | Deleted by cascade. The seat trigger ([ADR 0006](0006-capacity-concurrency.md)) releases the seats, but organizers lose the history | Active registrations cancelled first, then the rows anonymized: the user reference moves to a tombstone so organizer history stays intact |
 | Hosted events | The delete is refused while the user organizes events (no cascade on `organizer_id`) | Upcoming events cancelled with notice to attendees, past events kept under an anonymized organizer |
 | Telemetry | Pseudonymous IDs in logs and Sentry age out with the vendor's retention | Same, with a written retention period |
 

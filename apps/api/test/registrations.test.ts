@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { events } from '../src/db/schema';
+import { events, users } from '../src/db/schema';
+import { seatDrift } from '../src/modules/registrations/seats';
 import { createEvent, eventInput, login, seatCounts, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
@@ -77,6 +78,73 @@ it('survives one member registering and cancelling at the same time', async () =
   expect(responses.map((r) => r.statusCode).filter((s) => s >= 500)).toEqual([]);
   const { registeredCount, confirmed } = await seatCounts(ctx.db, event.id);
   expect(registeredCount).toBe(confirmed);
+});
+
+it('keeps the counter equal to the rows under mixed register and cancel load', async () => {
+  const organizer = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, organizer.userId, 8);
+  const members = await Promise.all(Array.from({ length: 20 }, () => signedInMember(ctx.db)));
+
+  // Every member registers, cancels and registers again, all at once, for 8 seats.
+  const responses = await Promise.all(
+    members.flatMap((m) => [register, cancelMine, register].map((act) => act(event.id, m.cookie))),
+  );
+
+  expect(responses.map((r) => r.statusCode).filter((s) => s >= 500)).toEqual([]);
+  const { registeredCount, confirmed } = await seatCounts(ctx.db, event.id);
+  expect(registeredCount).toBe(confirmed);
+  expect(registeredCount).toBeLessThanOrEqual(8);
+});
+
+it('releases a seat when its member is deleted, not only through the API', async () => {
+  const organizer = await signedInMember(ctx.db);
+  const member = await signedInMember(ctx.db);
+  const other = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, organizer.userId, 1);
+  expect((await register(event.id, member.cookie)).statusCode).toBe(201);
+
+  // Cascades to the registration row; the trigger, not application code, frees the seat.
+  await ctx.db.delete(users).where(eq(users.id, member.userId));
+
+  expect(await seatCounts(ctx.db, event.id)).toEqual({ registeredCount: 0, confirmed: 0 });
+  expect((await register(event.id, other.cookie)).statusCode).toBe(201);
+});
+
+it('answers EVENT_BUSY instead of queueing behind a held event row', async () => {
+  const organizer = await signedInMember(ctx.db);
+  const member = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, organizer.userId, 10);
+
+  // Another transaction holds the event row for longer than SEAT_LOCK_TIMEOUT_MS.
+  let locked!: () => void;
+  let release!: () => void;
+  const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const holder = ctx.db.transaction(async (tx) => {
+    await tx.select({ id: events.id }).from(events).where(eq(events.id, event.id)).for('update');
+    locked();
+    await held;
+  });
+  await lockTaken;
+
+  const res = await register(event.id, member.cookie);
+  release();
+  await holder;
+
+  expect([res.statusCode, res.json().code]).toEqual([503, 'EVENT_BUSY']);
+  expect(await seatCounts(ctx.db, event.id)).toEqual({ registeredCount: 0, confirmed: 0 });
+  expect((await register(event.id, member.cookie)).statusCode).toBe(201);
+});
+
+it('reports no seat drift, to the test and to an admin', async () => {
+  expect(await seatDrift(ctx.db)).toEqual([]);
+  const admin = await login(ctx.app, 'admin');
+  const res = await ctx.app.inject({
+    method: 'GET',
+    url: '/api/v1/admin/integrity/seats',
+    headers: { cookie: admin.cookie },
+  });
+  expect([res.statusCode, res.json()]).toEqual([200, { drift: [] }]);
 });
 
 it('cancelling an event cancels its registrations, once, and only before it starts', async () => {

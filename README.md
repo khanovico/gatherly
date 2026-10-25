@@ -52,17 +52,17 @@ Stack: TypeScript end to end — Fastify, Zod, Drizzle, Postgres 17, React. One 
 | Step | Endpoint | Rule | Error |
 |---|---|---|---|
 | 1. Organizer creates an event | `POST /api/v1/events` | Needs the `events:create` entitlement; UTC start and end plus an IANA time zone; capacity 1–10,000; start in the future | `ENTITLEMENT_REQUIRED`, `VALIDATION_FAILED` |
-| 2. Attendee registers | `POST /api/v1/events/:id/registrations` | Signed-in user; one active registration per event | `ALREADY_REGISTERED`, `EVENT_STARTED`, `EVENT_CANCELLED` |
-| 3. Capacity reached | same | Conditional update matches no row | `409 EVENT_FULL` |
+| 2. Attendee registers | `POST /api/v1/events/:id/registrations` | Signed-in user; one active registration per event | `ALREADY_REGISTERED`, `EVENT_STARTED`, `EVENT_CANCELLED`, `EVENT_BUSY` |
+| 3. Capacity reached | same | Locking conditional read matches no row | `409 EVENT_FULL` |
 | 4. Attendee cancels | `DELETE /api/v1/events/:id/registrations/me` | Soft-cancel keeps history; the seat is released; re-registering is allowed | `NOT_REGISTERED`, `EVENT_STARTED` |
 
-**How capacity is enforced** ([seats.ts](apps/api/src/modules/registrations/seats.ts), [ADR 0006](docs/adr/0006-capacity-concurrency.md)). Registration is one transaction: `UPDATE events SET registered_count = registered_count + 1 WHERE id = ? AND status = 'published' AND registered_count < capacity AND starts_at > now()`, then `INSERT` the registration. The update takes the row lock, so concurrent requests queue on the event row and Postgres re-checks the condition after each commit; the second request for the last seat updates nothing and gets `EVENT_FULL`. A duplicate registration violates the partial unique index and rolls the increment back. Cancel is the mirror image, and both paths lock the event row before the registration row, so register and cancel cannot deadlock. A check constraint (`0 ≤ registered_count ≤ capacity`) is the last line of defence.
+**How capacity is enforced** ([seats.ts](apps/api/src/modules/registrations/seats.ts), [migration 0003](apps/api/drizzle/0003_seat_count_trigger.sql), [ADR 0006](docs/adr/0006-capacity-concurrency.md)). Registration is one transaction: `SELECT … FROM events WHERE id = ? AND status = 'published' AND registered_count < capacity AND starts_at > now() FOR UPDATE`, then `INSERT` the registration. The locking read serializes concurrent requests on the event row, and Postgres re-checks the conditions for a request that had to wait; the second request for the last seat matches nothing and gets `EVENT_FULL`. The registration row *is* the seat: a database trigger moves `registered_count` on every insert, status change or delete of a seat-holding row, so no handler, cascade or manual fix can make the counter and the rows disagree, and `GET /admin/integrity/seats` proves it. A duplicate registration violates the partial unique index and rolls back. Cancel is the mirror image; both paths lock the event row before the registration row, so they cannot deadlock. "Has it started" is evaluated on the database clock everywhere. A `lock_timeout` turns a stampede on one event into `503 EVENT_BUSY` (retry) rather than a stalled connection pool. A check constraint (`0 ≤ registered_count ≤ capacity`) is the last line of defence.
 
 **Validation and errors.** Zod schemas at the API boundary (shared with the web forms), database constraints as a backstop, and RFC 9457 `problem+json` responses with a stable `code` clients can branch on. Error codes per endpoint: [docs/api.md](docs/api.md).
 
 **Role-based authorization** is implemented, not only described: `requireUser`, `requireAdmin`, `requireEntitlement` and `assertOwnerOrAdmin` in [guards.ts](apps/api/src/lib/guards.ts), checked in a fixed order (session → suspended → admin bypass → entitlement → ownership). The UI mirrors them for usability only. Full [permission matrix](docs/architecture.md#permission-matrix).
 
-**Tests** ([apps/api/test](apps/api/test), Vitest against a real Postgres): the brief's workflow end to end through the HTTP layer; 25 parallel registrations for 10 seats ending with exactly 10 confirmations and 15 `EVENT_FULL`; one member registering and cancelling concurrently with no 5xx and the counter equal to the confirmed rows; an error-path table (started, cancelled, duplicate, not registered, wrong organizer); authorization per role.
+**Tests** ([apps/api/test](apps/api/test), Vitest against a real Postgres): the brief's workflow end to end through the HTTP layer; 25 parallel registrations for 10 seats ending with exactly 10 confirmations and 15 `EVENT_FULL`; 20 members each registering, cancelling and registering again at once for 8 seats, ending with the counter equal to the rows; a deleted member's seat released by the trigger; a held event row answering `EVENT_BUSY`; the drift check empty; an error-path table (started, cancelled, duplicate, not registered, wrong organizer); authorization per role.
 
 ## Assumptions, limitations, tradeoffs
 
@@ -84,12 +84,12 @@ Stack: TypeScript end to end — Fastify, Zod, Drizzle, Postgres 17, React. One 
 
 | Chose | Over | Because |
 |---|---|---|
-| Conditional update on a counter column | `SELECT … FOR UPDATE` then count | One round trip under the lock; the schema, not application code, carries the guarantee |
+| Locking read on a counter column that a trigger maintains | `SELECT … FOR UPDATE` then `COUNT(*)` of the rows | Same guarantee without a count on every read; the counter cannot drift because the database moves it, not each code path |
 | Database-enforced capacity | Queues, Redis counters or advisory locks | Correct under concurrency with no extra moving parts |
 | Server-side sessions in Postgres | Stateless JWTs | Instant revocation (suspend, sign-out) with no extra store |
 | One process serving API and web | Separate frontend hosting | One deployment, same origin, no CORS or cross-site cookies |
 
-The known cost of the counter design: all registrations for one event serialize on one row, which caps throughput for a single very hot event. The next step is a waiting room or split seat inventory, with the trigger in [ADR 0006](docs/adr/0006-capacity-concurrency.md).
+The known cost of the counter design: all registrations for one event serialize on one row, which caps throughput for a single very hot event. The `lock_timeout` keeps that from spreading to the rest of the platform; the next step is a waiting room or split seat inventory, with the signal to act in [ADR 0006](docs/adr/0006-capacity-concurrency.md).
 
 ## Before production
 

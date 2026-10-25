@@ -75,8 +75,8 @@ Access column: **public** needs nothing; **session** needs any signed-in, non-su
 
 | Method | Path | Access | Purpose | Notable errors |
 |---|---|---|---|---|
-| POST | `/events/:id/registrations` | session | Register; race-safe capacity check ([ADR 0006](adr/0006-capacity-concurrency.md)) | `EVENT_FULL`, `ALREADY_REGISTERED`, `EVENT_STARTED`, `EVENT_CANCELLED`, `NOT_FOUND` |
-| DELETE | `/events/:id/registrations/me` | session | Cancel my registration; frees the seat | `NOT_REGISTERED`, `EVENT_STARTED` |
+| POST | `/events/:id/registrations` | session | Register; race-safe capacity check ([ADR 0006](adr/0006-capacity-concurrency.md)) | `EVENT_FULL`, `ALREADY_REGISTERED`, `EVENT_STARTED`, `EVENT_CANCELLED`, `NOT_FOUND`, `EVENT_BUSY` |
+| DELETE | `/events/:id/registrations/me` | session | Cancel my registration; frees the seat | `NOT_REGISTERED`, `EVENT_STARTED`, `EVENT_BUSY` |
 | GET | `/me/registrations` | session | My registrations with event summaries: `when=upcoming` (soonest first) or `past` (most recent first), paginated, with counts for both tabs | `VALIDATION_FAILED` |
 
 ### Organizer
@@ -85,7 +85,7 @@ Access column: **public** needs nothing; **session** needs any signed-in, non-su
 |---|---|---|---|---|
 | GET | `/me/events` | session | Events I organize: `when=upcoming`, `past` or `cancelled`, paginated, with dashboard stats (tab sizes, registrations, mean fill rate) | `VALIDATION_FAILED` |
 | GET | `/events/:id/registrations` | owner or admin | Attendee list, oldest first, paginated, searchable with `q`; in demo mode, real accounts' emails are masked and not searchable | `FORBIDDEN`, `NOT_FOUND` |
-| POST | `/registrations/:id/cancel` | owner or admin | Remove an attendee; frees the seat | `FORBIDDEN`, `NOT_FOUND`, `NOT_REGISTERED` (already cancelled) |
+| POST | `/registrations/:id/cancel` | owner or admin | Remove an attendee; frees the seat | `FORBIDDEN`, `NOT_FOUND`, `NOT_REGISTERED` (already cancelled), `EVENT_BUSY` |
 
 ### Administration
 
@@ -95,7 +95,8 @@ Access column: **public** needs nothing; **session** needs any signed-in, non-su
 | GET | `/admin/users` | admin | Users, paginated and searchable; in demo mode, real accounts' emails are masked (`j***@example.com`) and not searchable | `FORBIDDEN` |
 | PATCH | `/admin/users/:id` | admin | Change status (suspend), role or plan | `FORBIDDEN` (last active admin, or a real account in demo mode), `PROTECTED_DEMO_ACCOUNT`, `NOT_FOUND` |
 | GET | `/admin/events` | admin | All events, including cancelled | `FORBIDDEN` |
-| POST | `/admin/demo/reset` | admin, demo mode only | Delete events hosted by demo accounts and the non-persona `@gatherly.demo` members, reset the personas, recount seats, reseed. Real accounts stay; their activity on demo events goes with those events | `FORBIDDEN`, `NOT_FOUND` (demo mode off) |
+| GET | `/admin/integrity/seats` | admin | Events whose `registeredCount` differs from their active registration rows; expected `{ "drift": [] }`, since a database trigger keeps them equal ([ADR 0006](adr/0006-capacity-concurrency.md)) | `FORBIDDEN` |
+| POST | `/admin/demo/reset` | admin, demo mode only | Delete events hosted by demo accounts and the non-persona `@gatherly.demo` members, reset the personas, reseed. Real accounts stay; their activity on demo events goes with those events, and the seats the deleted members held are released by the trigger | `FORBIDDEN`, `NOT_FOUND` (demo mode off) |
 | POST | `/admin/diagnostics/error` | admin | Send a test error to Sentry; answers 500 with `traceId` and `sentryEventId`. One per 10 seconds | `RATE_LIMITED`, `FORBIDDEN` |
 
 ### Billing
@@ -130,6 +131,7 @@ Every error response carries one of these stable codes. Clients and tests branch
 | `NOT_REGISTERED` | 404 | Cancelling a registration that is not active | Refresh the event state |
 | `METHOD_NOT_ALLOWED` | 405 | Known path, wrong method; the `Allow` header lists the right ones | Fix the client call |
 | `EVENT_FULL` | 409 | No seats left | Show "sold out"; offer other events |
+| `EVENT_BUSY` | 503 | The event row was held by other registrations for longer than `SEAT_LOCK_TIMEOUT_MS` (default 3 s) | Retry after a moment; the seat count has not changed for this caller |
 | `EVENT_STARTED` | 409 | Registering, cancelling, editing or cancelling the event after the start time | Show the event as in progress or past |
 | `EVENT_CANCELLED` | 409 | Acting on a cancelled event | Show the event as cancelled |
 | `ALREADY_REGISTERED` | 409 | An active registration already exists | Show the existing registration |
@@ -141,6 +143,8 @@ Every error response carries one of these stable codes. Clients and tests branch
 | `PAID_TICKETS_UNAVAILABLE` | 422 | Event price above zero in the MVP | Keep the price at zero |
 | `RATE_LIMITED` | 429 | Too many requests in a window: sign-in, sign-up, demo sign-in, interactions, or the diagnostics error (one per 10 seconds) | Wait; honor the `Retry-After` header (sent by every limit except the diagnostics error) |
 | `INTERNAL` | 500, 503 | Unexpected failure, reported to Sentry with a trace ID; 503 from `/readyz` when the database is down | Show a retry option; quote the trace ID to support |
+
+Time rules (`EVENT_STARTED`) are evaluated on the database clock (`starts_at <= now()`) for every endpoint, so two API instances cannot disagree about whether an event has begun.
 | `COMING_SOON` | 501 | Feature designed but not built (checkout) | Show a "coming soon" dialog |
 
 **Status choices.** 400 means the request is malformed; 422 means it is well formed but asks for something the MVP will not do. 409 means the request is valid but conflicts with the current state of a resource (capacity, timing, uniqueness), so retrying unchanged will not help until that state changes. Ownership failures return 403 rather than 404 because events are public anyway; hiding their existence gains nothing. Wrong email and wrong password share one 401 so sign-in does not reveal who has an account; sign-up's 409 `EMAIL_TAKEN` does, a tradeoff accepted until email verification exists ([ADR 0008](adr/0008-password-signup.md)).
