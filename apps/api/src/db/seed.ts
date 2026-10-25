@@ -151,10 +151,12 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
   const saves = planSaves(random, now, people, seeded, going);
   await tx.insert(eventSaves).values(saves);
   const activity = planInteractions(random, now, people, seeded, { registrations: signups, saves });
-  // Postgres caps one statement at 65,535 parameters.
-  for (let i = 0; i < activity.length; i += 5_000) {
-    await tx.insert(interactions).values(activity.slice(i, i + 5_000));
-  }
+  // ~25k rows as one JSON parameter: binding them column by column took most of the reset.
+  await tx.execute(sql`
+    insert into ${interactions} (user_id, event_id, type, surface, position, ranker_version, request_id, created_at)
+    select * from json_to_recordset(${JSON.stringify(activity)}) as x(
+      "userId" uuid, "eventId" uuid, type interaction_type, surface text, position int,
+      "rankerVersion" text, "requestId" text, "createdAt" timestamptz)`);
 };
 
 /** Wipes every event and non-persona user, then reseeds with dates relative to now. */
