@@ -7,6 +7,7 @@ export const queryKeys = {
   events: {
     all: ['events'] as const,
     list: (query: Partial<EventListQuery>) => ['events', 'list', query] as const,
+    home: (query: object) => ['events', 'home', query] as const,
     detail: (id: string) => ['events', 'detail', id] as const,
     attendees: (id: string) => ['events', 'detail', id, 'attendees'] as const,
   },

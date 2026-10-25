@@ -2,9 +2,8 @@ import { CATEGORIES } from '@gatherly/shared';
 import { ArrowRight, CalendarCheck, Compass, Sparkles, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
+import { DiscoverRails } from '@/features/discover/rails';
 import { categoryMeta } from '@/features/events/lib';
-import { useEvents } from '@/features/events/queries';
 
 const steps: { icon: LucideIcon; title: string; text: string }[] = [
   {
@@ -107,28 +106,10 @@ function Hero() {
 }
 
 function FeaturedEvents() {
-  const { data, isPending, isError } = useEvents({ pageSize: 6 });
-  if (isError || data?.items.length === 0) return null;
   return (
-    <section className="page-container py-16">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-semibold">Happening soon</h2>
-          <p className="text-muted-foreground mt-1">The next gatherings on the calendar.</p>
-        </div>
-        <Link
-          to="/events"
-          className="text-primary inline-flex shrink-0 items-center gap-1 text-sm font-medium hover:underline"
-        >
-          View all <ArrowRight aria-hidden className="size-4" />
-        </Link>
-      </div>
-      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {isPending
-          ? Array.from({ length: 3 }, (_, i) => <EventCardSkeleton key={i} />)
-          : data.items.map((event) => <EventCard key={event.id} event={event} />)}
-      </div>
-    </section>
+    <div className="page-container space-y-14 py-16">
+      <DiscoverRails />
+    </div>
   );
 }
 

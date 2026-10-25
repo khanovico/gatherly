@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { ActiveFilters } from '@/features/discover/active-filters';
 import { FilterPanel, type PlaceFilters } from '@/features/discover/filter-panel';
 import { PersonalizeBanner } from '@/features/discover/personalize-banner';
+import { DiscoverRails } from '@/features/discover/rails';
 import { SortSelect } from '@/features/discover/sort-select';
 import { TagFilter } from '@/features/discover/tag-filter';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
@@ -175,6 +176,14 @@ export function Component() {
       )}
       <ActiveFilters />
       {me === null && <PersonalizeBanner />}
+      {!filtered && (
+        <>
+          <div className="mt-10 space-y-12">
+            <DiscoverRails />
+          </div>
+          <h2 className="mt-14 text-2xl font-semibold">All upcoming events</h2>
+        </>
+      )}
       {isError && !isFetchNextPageError ? (
         <IllustratedState
           image="/images/empty/error.webp"

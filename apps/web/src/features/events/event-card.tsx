@@ -146,9 +146,9 @@ export function EventCard({ event, className }: { event: EventSummary; className
   );
 }
 
-export function EventCardSkeleton() {
+export function EventCardSkeleton({ className }: { className?: string }) {
   return (
-    <div className="overflow-hidden rounded-2xl border" aria-hidden>
+    <div className={cn('overflow-hidden rounded-2xl border', className)} aria-hidden>
       <Skeleton className="aspect-video rounded-none" />
       <div className="space-y-3 p-4">
         <Skeleton className="h-4 w-1/3" />
