@@ -1,4 +1,4 @@
-import { ChevronDown, CreditCard, LogIn, LogOut, Ticket, UserRound } from 'lucide-react';
+import { ChevronDown, CreditCard, Heart, LogIn, LogOut, Ticket, UserRound } from 'lucide-react';
 import { Link } from 'react-router';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -88,6 +88,11 @@ export function PersonaSwitcher() {
         <DropdownMenuItem asChild>
           <Link to="/me/registrations">
             <Ticket /> My tickets
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link to="/me/saved">
+            <Heart /> Saved
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

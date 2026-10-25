@@ -23,6 +23,7 @@ export const router = createTracedBrowserRouter([
           { path: 'profile', lazy: () => import('@/pages/profile') },
           { path: 'u/:id', lazy: () => import('@/pages/public-profile') },
           { path: 'me/registrations', lazy: () => import('@/pages/my-registrations') },
+          { path: 'me/saved', lazy: () => import('@/pages/saved') },
           { path: 'pricing', lazy: () => import('@/pages/pricing') },
           { path: 'settings/billing', lazy: () => import('@/pages/billing-settings') },
           { path: 'organizer', lazy: () => import('@/pages/organizer-dashboard') },
