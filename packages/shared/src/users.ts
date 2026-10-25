@@ -22,11 +22,15 @@ export type SignupInput = z.infer<typeof signupInput>;
 export const signinInput = z.object({ email, password: z.string().min(1).max(128) });
 export type SigninInput = z.infer<typeof signinInput>;
 
-/** Users without a subscription are on `free`; admins get every entitlement through their role. */
+/**
+ * Users without a subscription are on `free`; admins get every entitlement through their role.
+ * `onboardingPending`: the onboarding wizard was neither finished nor skipped (`onboardedAt` is null).
+ */
 export const me = z.object({
   user: userSummary.extend({ email: z.email(), role: Role, status: UserStatus }),
   plan: PlanCode,
   entitlements: z.array(Entitlement),
+  onboardingPending: z.boolean(),
 });
 export type Me = z.infer<typeof me>;
 

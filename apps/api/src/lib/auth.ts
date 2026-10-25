@@ -5,7 +5,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { config } from '../config';
 import type { Db } from '../db/client';
-import { plans, sessions, subscriptions, users } from '../db/schema';
+import { plans, sessions, subscriptions, userProfiles, users } from '../db/schema';
 
 export type AuthUser = {
   id: string;
@@ -77,12 +77,18 @@ export const endSession = async (db: Db, reply: FastifyReply, token: string | un
 };
 
 export const toMe = async (db: Db, user: AuthUser): Promise<Me> => {
-  const [profile] = await db
-    .select({ email: users.email, avatarUrl: users.avatarUrl })
+  const [row] = await db
+    .select({
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+      onboardedAt: userProfiles.onboardedAt,
+    })
     .from(users)
+    .leftJoin(userProfiles, eq(userProfiles.userId, users.id))
     .where(eq(users.id, user.id));
+  const { onboardedAt, ...profile } = row!;
   const { plan, entitlements, ...rest } = user;
-  return { user: { ...rest, ...profile! }, plan, entitlements };
+  return { user: { ...rest, ...profile }, plan, entitlements, onboardingPending: !onboardedAt };
 };
 
 /** Parses cookies and resolves `request.user` for every route in the given scope. */

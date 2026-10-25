@@ -1,4 +1,5 @@
-import { Persona, me, userSummary } from '@gatherly/shared';
+import { hash, verify } from '@node-rs/argon2';
+import { Persona, me, signinInput, signupInput, userSummary } from '@gatherly/shared';
 import { eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -7,8 +8,14 @@ import { users } from '../../db/schema';
 import { SESSION_COOKIE, endSession, startSession, toMe } from '../../lib/auth';
 import { AppError } from '../../lib/errors';
 import { requireUser } from '../../lib/guards';
+import { rateLimit } from '../../lib/rate-limit';
 
 const personaCard = z.object({ persona: Persona, user: userSummary });
+
+// @node-rs/argon2 defaults to argon2id with OWASP-level cost.
+const hashPassword = (password: string) => hash(password);
+// Unknown emails still pay for one verify, so response time does not reveal which emails exist.
+const dummyHash = hashPassword('not-a-real-password');
 
 const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get('/auth/personas', { schema: { response: { 200: z.array(personaCard) } } }, async () => {
@@ -34,6 +41,46 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
         .from(users)
         .where(eq(users.email, PERSONAS[request.body.persona].email));
       if (!row) throw new AppError('NOT_FOUND', 404, 'Demo persona is not seeded');
+      await endSession(app.db, reply, request.cookies[SESSION_COOKIE]);
+      request.user = await startSession(app.db, reply, row.id);
+      return toMe(app.db, requireUser(request));
+    },
+  );
+
+  app.post(
+    '/auth/signup',
+    {
+      onRequest: rateLimit({ max: 10, windowMs: 60 * 60 * 1000 }),
+      schema: { body: signupInput, response: { 200: me } },
+    },
+    async (request, reply) => {
+      const { name, email, password } = request.body;
+      const [row] = await app.db
+        .insert(users)
+        .values({ name, email, passwordHash: await hashPassword(password) })
+        .onConflictDoNothing({ target: users.email })
+        .returning({ id: users.id });
+      if (!row) throw new AppError('EMAIL_TAKEN', 409, 'An account with this email already exists');
+      await endSession(app.db, reply, request.cookies[SESSION_COOKIE]);
+      request.user = await startSession(app.db, reply, row.id);
+      return toMe(app.db, requireUser(request));
+    },
+  );
+
+  app.post(
+    '/auth/signin',
+    {
+      onRequest: rateLimit({ max: 10, windowMs: 15 * 60 * 1000 }),
+      schema: { body: signinInput, response: { 200: me } },
+    },
+    async (request, reply) => {
+      const [row] = await app.db
+        .select({ id: users.id, passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.email, request.body.email));
+      const valid = await verify(row?.passwordHash ?? (await dummyHash), request.body.password);
+      if (!row?.passwordHash || !valid)
+        throw new AppError('INVALID_CREDENTIALS', 401, 'Email or password is incorrect');
       await endSession(app.db, reply, request.cookies[SESSION_COOKIE]);
       request.user = await startSession(app.db, reply, row.id);
       return toMe(app.db, requireUser(request));

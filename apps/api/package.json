@@ -17,6 +17,7 @@
     "@fastify/otel": "^0.21.4",
     "@fastify/static": "^10.1.7",
     "@gatherly/shared": "workspace:^",
+    "@node-rs/argon2": "^2.2.2",
     "@opentelemetry/api": "^1.10.0",
     "@opentelemetry/instrumentation": "^0.300.0",
     "@opentelemetry/instrumentation-http": "^0.300.0",
