@@ -14,6 +14,7 @@ A community events platform: organizers publish meetups, attendees reserve seats
 - [Run it locally](#run-it-locally)
 - [Repository map](#repository-map)
 - [Architecture at a glance](#architecture-at-a-glance)
+- [Observability](#observability)
 - [How the brief is covered](#how-the-brief-is-covered)
 - [Assumptions, limitations and tradeoffs](#assumptions-limitations-and-tradeoffs)
 - [Before production](#before-production)
@@ -124,6 +125,25 @@ flowchart LR
 | Telemetry | OpenTelemetry direct to Grafana Cloud; Sentry for errors | Mature signals on free tiers, no collector to run | No tail sampling | [ADR 0007](docs/adr/0007-telemetry.md) |
 
 The full picture, including the data model, request flow, permission matrix and scaling and security notes, is in [docs/architecture.md](docs/architecture.md).
+
+## Observability
+
+The live deployment sends traces, logs and metrics to Grafana Cloud and errors to Sentry. One trace ID follows a click from the browser through the API to every SQL query, log line and error, so a single ID answers "what happened, to whom, and why".
+
+| Signal | Where to look | What it shows |
+|---|---|---|
+| Browser pageload and API calls | Sentry trace view | Page timings, Web Vitals and the API request in one trace (the browser sends `traceparent`) |
+| API spans | Grafana Tempo | Fastify route, hooks and each Postgres query |
+| Logs | Grafana Loki | Structured request logs carrying `trace_id`, with email redacted |
+| Metrics | Grafana dashboard from `ops/grafana/dashboard.json` | Request rate, errors and latency by route; registrations, cancellations, events created |
+| Errors | Sentry `gatherly-api` and `gatherly-web` | Server errors (5xx only) and browser errors, tagged with release and trace |
+
+| | |
+|---|---|
+| ![Sentry trace](docs/images/sentry-trace.png) **Sentry:** browser pageload and the failing API call share one trace | ![Grafana trace](docs/images/grafana-trace.png) **Grafana Tempo:** the same trace ID with API and database spans |
+| ![Grafana dashboard](docs/images/grafana-dashboard.png) **Grafana dashboard:** HTTP rate, errors and latency by route, plus business counters | |
+
+Details, including the trace flow and the plan beyond free tiers, are in [docs/observability.md](docs/observability.md).
 
 ## How the brief is covered
 
