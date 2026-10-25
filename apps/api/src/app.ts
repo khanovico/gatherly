@@ -15,6 +15,7 @@ import eventsRoutes from './modules/events/routes';
 import healthRoutes from './modules/health/routes';
 import organizerRoutes from './modules/organizer/routes';
 import registrationsRoutes from './modules/registrations/routes';
+import { registerWeb } from './web';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -51,6 +52,7 @@ export async function buildApp(opts: { db?: Db } = {}) {
     },
     { prefix: '/api/v1' },
   );
+  await registerWeb(app);
 
   return app.withTypeProvider<ZodTypeProvider>();
 }
