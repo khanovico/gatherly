@@ -1,4 +1,4 @@
-import type { EventDetail, EventListQuery, EventSummary, Paginated } from '@gatherly/shared';
+import type { EventDetail, EventFeed, EventListQuery } from '@gatherly/shared';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -9,7 +9,7 @@ const fetchEvents = (query: Partial<EventListQuery>) => {
       value === undefined || value === '' ? [] : [[key, String(value)]],
     ),
   );
-  return apiFetch<Paginated<EventSummary>>(`/events?${params}`);
+  return apiFetch<EventFeed>(`/events?${params}`);
 };
 
 /** Published upcoming events, soonest first. Keeps the previous page on screen while filters change. */

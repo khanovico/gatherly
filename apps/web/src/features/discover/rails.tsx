@@ -39,8 +39,18 @@ export function DiscoverRails({
     return <Rail title="Loading picks" icon={Sparkles} blurb="" className={className} />;
   return data?.rails.map((rail) => (
     <Rail key={rail.id} title={rail.title} {...railMeta[rail.id]} className={className}>
-      {rail.events.map((event) => (
-        <EventCard key={event.id} event={event} className={slide} />
+      {rail.events.map((event, position) => (
+        <EventCard
+          key={event.id}
+          event={event}
+          className={slide}
+          tracking={{
+            surface: `rail_${rail.id}`,
+            position,
+            rankerVersion: data.rankerVersion,
+            requestId: data.requestId,
+          }}
+        />
       ))}
     </Rail>
   ));

@@ -28,6 +28,7 @@ import { EventDateTime } from '@/features/events/event-date-time';
 import { hideEvent, useIsHidden, useSaveToggle } from '@/features/events/feedback';
 import { eventLocation, formatDistance } from '@/features/events/lib';
 import { SeatsMeter } from '@/features/events/seats-meter';
+import { track, useImpression, type TrackingContext } from '@/lib/interactions';
 import { cn } from '@/lib/utils';
 
 const overlay = 'bg-background/90 shadow-sm backdrop-blur';
@@ -45,8 +46,15 @@ const reasonIcons: Record<ReasonKind, LucideIcon> = {
  * Cover-image card linking to the event page. The whole card is clickable via the title link;
  * Save and "Not interested" sit above it. Ranked results show why they were picked.
  */
-export function EventCard({ event, className }: { event: EventSummary; className?: string }) {
+export function EventCard(props: {
+  event: EventSummary;
+  className?: string;
+  /** Where the card is shown: logs impressions and clicks when set. */
+  tracking?: TrackingContext;
+}) {
+  const { event, className, tracking } = props;
   const { data: me } = useMe();
+  const ref = useImpression<HTMLElement>(event.id, tracking);
   const toggleSave = useSaveToggle(event);
   if (useIsHidden(event.id)) return null;
   const LocationIcon = event.format === 'online' ? Globe : MapPin;
@@ -55,6 +63,7 @@ export function EventCard({ event, className }: { event: EventSummary; className
   const reasons = (event.reasons ?? []).filter((r) => r.kind !== 'distance').slice(0, 2);
   return (
     <article
+      ref={ref}
       className={cn(
         'group bg-card relative flex flex-col overflow-hidden rounded-2xl border shadow-xs transition',
         'focus-within:ring-ring/50 focus-within:ring-[3px] hover:-translate-y-0.5 hover:shadow-lg',
@@ -118,7 +127,11 @@ export function EventCard({ event, className }: { event: EventSummary; className
           )}
         </div>
         <h3 className="line-clamp-2 text-lg leading-snug font-semibold">
-          <Link to={`/events/${event.id}`} className="outline-none after:absolute after:inset-0">
+          <Link
+            to={`/events/${event.id}`}
+            onClick={() => tracking && track({ ...tracking, eventId: event.id, type: 'click' })}
+            className="outline-none after:absolute after:inset-0"
+          >
             {event.title}
           </Link>
         </h3>

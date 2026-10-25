@@ -84,7 +84,11 @@ export function Component() {
   };
   const list = useInfiniteEvents(query);
   const { data, isPending, isError, isPlaceholderData, isFetchNextPageError } = list;
-  const items = data?.pages.flatMap((page) => page.items) ?? [];
+  // Each page was ranked by its own request: impressions echo the one that served the card.
+  const items =
+    data?.pages.flatMap(({ items: events, rankerVersion, requestId }) =>
+      events.map((event) => ({ event, rankerVersion, requestId })),
+    ) ?? [];
   const total = data?.pages[0]?.total ?? 0;
   const filtered =
     Boolean(q || category || tags.length || dates.when || dates.from) ||
@@ -213,7 +217,18 @@ export function Component() {
         >
           {isPending
             ? Array.from({ length: 6 }, (_, i) => <EventCardSkeleton key={i} />)
-            : items.map((event) => <EventCard key={event.id} event={event} />)}
+            : items.map(({ event, ...ranking }, position) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  tracking={{
+                    surface: 'discover_grid',
+                    position,
+                    query: q || undefined,
+                    ...ranking,
+                  }}
+                />
+              ))}
           {list.isFetchingNextPage &&
             Array.from({ length: 3 }, (_, i) => <EventCardSkeleton key={`more-${i}`} />)}
         </div>
