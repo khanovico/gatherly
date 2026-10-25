@@ -1,8 +1,16 @@
-import { ShieldCheck } from 'lucide-react';
+import { LayoutGrid, ShieldCheck, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessDenied } from '@/features/admin/access-denied';
 import { OverviewTab } from '@/features/admin/overview-tab';
+import { UsersTab } from '@/features/admin/users-tab';
 import { useMe } from '@/hooks/use-me';
+
+const sections = [
+  { value: 'overview', label: 'Overview', icon: LayoutGrid, Panel: OverviewTab },
+  { value: 'users', label: 'Users', icon: Users, Panel: UsersTab },
+];
 
 export function Component() {
   const { data: me, isPending } = useMe();
@@ -29,7 +37,30 @@ export function Component() {
           </div>
         </div>
       </header>
-      <OverviewTab />
+      <AdminSections />
     </div>
+  );
+}
+
+/** The open section lives in `?tab=`, so it is linkable and survives a reload. */
+function AdminSections() {
+  const [params, setParams] = useSearchParams();
+  const tab = sections.find((s) => s.value === params.get('tab'))?.value ?? 'overview';
+
+  return (
+    <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
+      <TabsList variant="line" className="mb-6">
+        {sections.map(({ value, label, icon: Icon }) => (
+          <TabsTrigger key={value} value={value} className="px-3">
+            <Icon aria-hidden /> {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {sections.map(({ value, Panel }) => (
+        <TabsContent key={value} value={value}>
+          <Panel />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
