@@ -4,13 +4,15 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 import { useForm, type FieldPath } from 'react-hook-form';
 import { z } from 'zod';
+import { ComingSoonDialog } from '@/components/coming-soon-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePasswordAuth } from '@/features/auth/use-demo-login';
 import { ApiError, errorMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type Mode = 'signin' | 'signup';
 
@@ -23,7 +25,13 @@ const authErrors: z.core.$ZodErrorMap = (issue) => {
     return issue.minimum === 1 ? 'Required' : `At least ${issue.minimum} characters`;
 };
 
-/** Email and password sign-in / sign-up. */
+const providers = [
+  { name: 'Google', logo: '/images/brand/google.svg' },
+  { name: 'Apple', logo: '/images/brand/apple.svg', className: 'dark:invert' },
+  { name: 'Facebook', logo: '/images/brand/facebook.svg' },
+];
+
+/** Email and password sign-in / sign-up, with social providers shown as "coming soon". */
 export function AuthCard({ initialMode, next }: { initialMode: Mode; next?: string }) {
   const [mode, setMode] = useState(initialMode);
   return (
@@ -35,6 +43,24 @@ export function AuthCard({ initialMode, next }: { initialMode: Mode; next?: stri
             <TabsTrigger value="signup">Create account</TabsTrigger>
           </TabsList>
         </Tabs>
+        <div className="grid gap-2">
+          {providers.map(({ name, logo, className }) => (
+            <ComingSoonDialog
+              key={name}
+              title={`${name} sign-in is on the way`}
+              description="Social sign-in arrives with a hosted identity provider. For now, use email and password or a demo account."
+              trigger={
+                <Button variant="outline" size="lg">
+                  <img src={logo} alt="" className={cn('size-4', className)} />
+                  Continue with {name}
+                </Button>
+              }
+            />
+          ))}
+        </div>
+        <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+          or with email
+        </FieldSeparator>
         <PasswordForm key={mode} mode={mode} next={next} />
       </CardContent>
     </Card>
@@ -83,7 +109,20 @@ function PasswordForm({ mode, next }: { mode: Mode; next?: string }) {
           <FieldError errors={[fieldError('email')]} />
         </Field>
         <Field data-invalid={!!fieldError('password')}>
-          <FieldLabel htmlFor="auth-password">Password</FieldLabel>
+          <div className="flex items-center justify-between">
+            <FieldLabel htmlFor="auth-password">Password</FieldLabel>
+            {!isSignup && (
+              <ComingSoonDialog
+                title="Password reset is on the way"
+                description="Email-based password reset arrives with email verification. Until then, create a new account or use a demo account."
+                trigger={
+                  <Button type="button" variant="link" className="h-auto p-0 text-sm">
+                    Forgot password?
+                  </Button>
+                }
+              />
+            )}
+          </div>
           <PasswordInput
             id="auth-password"
             autoComplete={isSignup ? 'new-password' : 'current-password'}
