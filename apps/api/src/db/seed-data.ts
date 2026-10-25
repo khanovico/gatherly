@@ -1,7 +1,7 @@
 import type { NeighborhoodId } from '@gatherly/shared';
 import type { events } from './schema';
 
-type DemoEvent = Pick<
+export type DemoEvent = Pick<
   typeof events.$inferInsert,
   | 'title'
   | 'summary'
@@ -17,8 +17,8 @@ type DemoEvent = Pick<
   tags: string[];
   /** In-person only: venue coordinates and city derive from it. */
   neighborhood?: NeighborhoodId;
-  /** Relative to the seed run: `days` from today at local time `at` in New York. */
-  when: { days: number; at: string; hours: number };
+  /** Relative to the seed run: `days` from today (then the next Saturday or Sunday when `on` is set) at local time `at` in New York. */
+  when: { days: number; on?: 'sat' | 'sun'; at: string; hours: number };
   cover: 1 | 2;
   /** Background members registered; Alex comes on top when `alex` is set. */
   going: number;
@@ -265,5 +265,171 @@ export const DEMO_EVENTS: DemoEvent[] = [
     cover: 1,
     going: 18,
     alex: true,
+  },
+  {
+    title: 'AI Builders Night: Demos & Drinks',
+    summary: 'Six five-minute demos of things people built with AI this month.',
+    description:
+      'Builders show what they shipped, what broke and what surprised them, from agents that file expense reports to a model that sorts recycling. Every demo is live and every presenter takes two questions. Drinks and snacks from 6:30, demos start at 7:15.',
+    category: 'tech',
+    format: 'in_person',
+    venueName: 'Kent Avenue Studios',
+    address: '68 Kent Ave',
+    neighborhood: 'williamsburg',
+    tags: ['machine-learning', 'startups'],
+    when: { days: 3, at: '18:30', hours: 3 },
+    capacity: 120,
+    cover: 2,
+    going: 95,
+    alex: true,
+    organizer: 'Daniel Okafor',
+  },
+  {
+    title: 'Kubernetes Without the Jargon',
+    summary: 'What pods, services and ingress actually do, explained with one small app.',
+    description:
+      'A plain-language tour of Kubernetes for developers who deploy to it but never set it up. We take one small web app from a Dockerfile to a running cluster and stop at every concept to explain why it exists. The recording and manifests are shared afterwards.',
+    category: 'tech',
+    format: 'online',
+    onlineUrl: 'https://live.gatherly.demo/kubernetes-without-jargon',
+    tags: ['cloud', 'web-development'],
+    when: { days: 5, at: '13:00', hours: 1.5 },
+    capacity: 200,
+    cover: 1,
+    going: 64,
+    organizer: 'Priya Raman',
+  },
+  {
+    title: 'Open Source Saturday: Your First Contribution',
+    summary: 'Pair with maintainers and open your first pull request before lunch.',
+    description:
+      'Maintainers from five popular projects bring issues labelled for newcomers. You pair with someone who has done it before, set up the project, make the change and open the pull request together. Bring a laptop with Git installed; coffee and bagels are on us.',
+    category: 'tech',
+    format: 'in_person',
+    venueName: 'LIC Code Collective',
+    address: '27-01 Jackson Ave',
+    neighborhood: 'long-island-city',
+    tags: ['open-source', 'web-development'],
+    when: { days: 6, on: 'sat', at: '10:00', hours: 4 },
+    capacity: 30,
+    cover: 1,
+    going: 30,
+    organizer: 'Daniel Okafor',
+  },
+  {
+    title: 'Data Viz Club: Mapping NYC Open Data',
+    summary: 'Turn 311 complaints and street trees into maps worth sharing.',
+    description:
+      'This month we work with two NYC Open Data sets: 311 noise complaints and the street tree census. A short demo covers loading the data and choosing a projection, then small groups build a map each and present it in the last half hour. Any tool is welcome.',
+    category: 'tech',
+    format: 'in_person',
+    venueName: 'Stavros Niarchos Foundation Library',
+    address: '455 5th Ave',
+    neighborhood: 'midtown',
+    tags: ['data'],
+    when: { days: 13, at: '18:30', hours: 2 },
+    capacity: 40,
+    cover: 2,
+    going: 38,
+    organizer: 'Priya Raman',
+  },
+  {
+    title: 'Typography Walk: Signs of Lower Manhattan',
+    summary: 'A slow walk past carved stone, ghost signs and subway mosaics.',
+    description:
+      'From the carved lettering on old bank buildings to the mosaic station names underground, Lower Manhattan is a museum of type. A type designer leads the walk, explains how each sign was made and why it still works. Bring a phone or sketchbook.',
+    category: 'design',
+    format: 'in_person',
+    venueName: 'Bowling Green',
+    address: 'Broadway & Whitehall St',
+    neighborhood: 'financial-district',
+    tags: ['typography'],
+    when: { days: 7, on: 'sun', at: '11:00', hours: 2 },
+    capacity: 20,
+    cover: 1,
+    going: 14,
+    organizer: 'Tomás Rivera',
+  },
+  {
+    title: 'UX Research Roundtable',
+    summary: 'Researchers compare notes on recruiting, synthesis and getting heard.',
+    description:
+      'A small, candid roundtable for UX researchers and the designers and PMs who work with them. Three short prompts frame the evening: recruiting real users on a budget, synthesis that survives contact with a roadmap, and sharing findings people act on.',
+    category: 'design',
+    format: 'in_person',
+    venueName: 'Chelsea Market Loft',
+    address: '75 9th Ave, 4th floor',
+    neighborhood: 'chelsea',
+    tags: ['ux-research', 'product-design'],
+    when: { days: 15, at: '18:30', hours: 2 },
+    capacity: 35,
+    cover: 2,
+    going: 33,
+  },
+  {
+    title: 'Illustration Jam: Draw Your Neighborhood',
+    summary: 'An afternoon of drawing Greenpoint storefronts, with tips from a local illustrator.',
+    description:
+      'We start with a short demo on simplifying buildings into shapes, then head out in pairs to draw storefronts along Manhattan Avenue. Back inside, we pin everything up and swap feedback over tea. Paper and pens provided; all levels welcome.',
+    category: 'design',
+    format: 'in_person',
+    venueName: 'Greenpoint Library',
+    address: '107 Norman Ave',
+    neighborhood: 'greenpoint',
+    tags: ['illustration', 'drawing'],
+    when: { days: 19, on: 'sat', at: '14:00', hours: 2.5 },
+    capacity: 25,
+    cover: 1,
+    going: 9,
+    organizer: 'Tomás Rivera',
+  },
+  {
+    title: 'Fundraising Office Hours with Angel Investors',
+    summary: 'Fifteen-minute slots with angels who write first checks.',
+    description:
+      'Four active angel investors hold back-to-back fifteen-minute office hours. Bring your deck or just your questions: valuation, SAFE terms, how to build a target list. Slots are assigned on arrival, and everyone stays for an open Q&A at the end.',
+    category: 'business',
+    format: 'in_person',
+    venueName: 'Wall Street Collective',
+    address: '14 Wall St, 20th floor',
+    neighborhood: 'financial-district',
+    tags: ['fundraising', 'startups'],
+    when: { days: 11, at: '17:30', hours: 2 },
+    capacity: 24,
+    cover: 1,
+    going: 23,
+    organizer: 'Marcus Johnson',
+  },
+  {
+    title: 'Marketing on a Shoestring',
+    summary: 'Growth tactics for small businesses with no ad budget.',
+    description:
+      'Three owners of NYC small businesses, a bakery, a bike shop and a design studio, share the low-cost tactics that actually brought customers in: local partnerships, email that people open and making the most of map listings. Live Q&A at the end.',
+    category: 'business',
+    format: 'online',
+    onlineUrl: 'https://live.gatherly.demo/marketing-on-a-shoestring',
+    tags: ['marketing'],
+    when: { days: 4, at: '12:00', hours: 1 },
+    capacity: 300,
+    cover: 2,
+    going: 87,
+    organizer: 'Marcus Johnson',
+  },
+  {
+    title: 'Career Switchers Breakfast: Into Tech',
+    summary: 'People who moved into tech from teaching, nursing and law share how.',
+    description:
+      'A relaxed breakfast with four people who changed careers in their thirties. They cover what transferred, what they had to learn and how they landed the first role. Small tables, so there is time for your own questions.',
+    category: 'business',
+    format: 'in_person',
+    venueName: 'Brooklyn Heights Library',
+    address: '286 Cadman Plaza W',
+    neighborhood: 'brooklyn-heights',
+    tags: ['careers'],
+    when: { days: 17, at: '08:30', hours: 1.5 },
+    capacity: 30,
+    cover: 2,
+    going: 16,
+    organizer: 'Marcus Johnson',
   },
 ];

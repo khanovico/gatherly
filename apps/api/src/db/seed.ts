@@ -4,7 +4,7 @@ import type { Db } from './client';
 import type { Persona } from '@gatherly/shared';
 import { PERSONAS, ensurePersonas } from './personas';
 import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
-import { DEMO_EVENTS } from './seed-data';
+import { DEMO_EVENTS, type DemoEvent } from './seed-data';
 import { HOSTS, PERSONA_PROFILES, generateMembers } from './seed-members';
 import { affinity } from './seed-affinity';
 import { createRandom } from './seed-random';
@@ -26,11 +26,14 @@ const memberEmail = (name: string) =>
     .toLowerCase()
     .replace(' ', '.')}@gatherly.demo`;
 
-/** `days` from today at the wall-clock time `at` ("18:30") in `timeZone`. */
-const localTime = (now: Date, days: number, at: string, timeZone: string) => {
+const WEEKEND_DAY = { sat: 6, sun: 0 };
+
+/** `days` from today (then forward to the next `on` day) at the wall-clock time `at` in `timeZone`. */
+const localTime = (now: Date, { days, at, on }: DemoEvent['when'], timeZone: string) => {
   const [hour = 0, minute = 0] = at.split(':').map(Number);
   const wall = new Date(now);
   wall.setUTCDate(wall.getUTCDate() + days);
+  if (on) wall.setUTCDate(wall.getUTCDate() + ((WEEKEND_DAY[on] - wall.getUTCDay() + 7) % 7));
   wall.setUTCHours(hour, minute, 0, 0);
   const inZone = new Date(wall.toLocaleString('en-US', { timeZone }));
   const inUtc = new Date(wall.toLocaleString('en-US', { timeZone: 'UTC' }));
@@ -84,7 +87,7 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
 
   const crowd = members.map((m, i) => ({ id: m.id, profile: seeds[i]!.profile }));
   const planned = DEMO_EVENTS.map(({ when, cover, going, alex, organizer, ...fixture }) => {
-    const startsAt = localTime(now, when.days, when.at, TIMEZONE);
+    const startsAt = localTime(now, when, TIMEZONE);
     const hood = NEIGHBORHOODS.find((n) => n.id === fixture.neighborhood);
     // Venues sit within ~500 m of their neighborhood's center.
     const jitter = () => (random.next() - 0.5) * 0.01;
