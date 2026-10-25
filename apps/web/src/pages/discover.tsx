@@ -1,8 +1,9 @@
 import { CATEGORIES, type Category } from '@gatherly/shared';
-import { CalendarDays, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ArrowUp, CalendarDays, RotateCw, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
+import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/select';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
 import { categoryMeta } from '@/features/events/lib';
-import { useEvents } from '@/features/events/queries';
+import { useInfiniteEvents } from '@/features/events/queries';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 12;
@@ -41,7 +42,6 @@ export function Component() {
   const q = params.get('q') ?? '';
   const category = CATEGORIES.find((c) => c === params.get('category'));
   const when = (Object.keys(whenLabels) as When[]).find((w) => w === params.get('when')) ?? 'any';
-  const page = Math.max(1, Number(params.get('page')) || 1);
   const [text, setText] = useState(q);
   const [syncedQ, setSyncedQ] = useState(q);
   if (q !== syncedQ) {
@@ -57,12 +57,14 @@ export function Component() {
     chips.current?.scrollTo({ left: (active?.offsetLeft ?? 0) - 16, behavior: 'smooth' });
   }, [category]);
 
-  const query = { q: q || undefined, category, ...dateRange(when), page, pageSize: PAGE_SIZE };
-  const { data, isPending, isError, isPlaceholderData, refetch } = useEvents(query);
-  const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
+  const query = { q: q || undefined, category, ...dateRange(when), pageSize: PAGE_SIZE };
+  const list = useInfiniteEvents(query);
+  const { data, isPending, isError, isPlaceholderData, isFetchNextPageError } = list;
+  const items = data?.pages.flatMap((page) => page.items) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
   const filtered = Boolean(q || category || when !== 'any');
 
-  /** Sets (or clears, when empty) search params; any filter change goes back to page 1. */
+  /** Sets search params, or clears them when the value is empty. */
   const update = (changes: Record<string, string | undefined>, replace = false) =>
     setParams(
       (prev) => {
@@ -70,7 +72,6 @@ export function Component() {
         for (const [key, value] of Object.entries(changes))
           if (value) next.set(key, value);
           else next.delete(key);
-        if (!('page' in changes)) next.delete('page');
         return next;
       },
       { replace },
@@ -80,16 +81,12 @@ export function Component() {
     window.clearTimeout(searchTimer.current);
     searchTimer.current = window.setTimeout(() => update({ q: value.trim() }, true), 300);
   };
-  const goToPage = (next: number) => {
-    update({ page: next > 1 ? String(next) : undefined });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   return (
     <section className="page-container py-10 sm:py-14">
       <h1 className="text-3xl font-semibold sm:text-4xl">Discover events</h1>
       <p className="text-muted-foreground mt-2" aria-live="polite">
-        {data ? `${data.total} upcoming ${data.total === 1 ? 'event' : 'events'}` : ' '}
+        {data ? `${total} upcoming ${total === 1 ? 'event' : 'events'}` : ' '}
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <form role="search" className="relative flex-1" onSubmit={(e) => e.preventDefault()}>
@@ -146,15 +143,15 @@ export function Component() {
           );
         })}
       </div>
-      {isError ? (
+      {isError && !isFetchNextPageError ? (
         <IllustratedState
           image="/images/empty/error.webp"
           title="We couldn't load events"
           description="Check your connection and try again."
         >
-          <Button onClick={() => refetch()}>Try again</Button>
+          <Button onClick={() => list.refetch()}>Try again</Button>
         </IllustratedState>
-      ) : data?.items.length === 0 ? (
+      ) : data && total === 0 ? (
         <IllustratedState
           image={filtered ? '/images/empty/no-results.webp' : '/images/empty/no-events.webp'}
           title={filtered ? 'No events match' : 'No upcoming events yet'}
@@ -175,26 +172,50 @@ export function Component() {
         >
           {isPending
             ? Array.from({ length: 6 }, (_, i) => <EventCardSkeleton key={i} />)
-            : data.items.map((event) => <EventCard key={event.id} event={event} />)}
+            : items.map((event) => <EventCard key={event.id} event={event} />)}
+          {list.isFetchingNextPage &&
+            Array.from({ length: 3 }, (_, i) => <EventCardSkeleton key={`more-${i}`} />)}
         </div>
       )}
-      {totalPages > 1 && (
-        <nav aria-label="Pagination" className="mt-12 flex items-center justify-center gap-4">
-          <Button variant="outline" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
-            <ChevronLeft /> Previous
+      {isFetchNextPageError && (
+        <div className="mt-10 flex flex-col items-center gap-3 text-center" role="alert">
+          <p className="text-muted-foreground">We couldn't load more events.</p>
+          <Button variant="outline" onClick={() => list.fetchNextPage()}>
+            <RotateCw /> Try again
           </Button>
-          <span className="text-muted-foreground text-sm">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            disabled={page >= totalPages}
-            onClick={() => goToPage(page + 1)}
-          >
-            Next <ChevronRight />
-          </Button>
-        </nav>
+        </div>
       )}
+      {data && total > 0 && !list.hasNextPage && <ListEnd total={total} />}
+      <LoadMoreSentinel
+        onVisible={() => list.fetchNextPage()}
+        disabled={!list.hasNextPage || list.isFetching || isError}
+      />
     </section>
+  );
+}
+
+/** Closing state once every page is on screen. */
+function ListEnd({ total }: { total: number }) {
+  return (
+    <div className="mt-14 flex flex-col items-center text-center">
+      <div className="flex w-full items-center gap-4">
+        <span className="h-px flex-1 bg-linear-to-r from-transparent to-border" />
+        <img src="/images/brand/mark.webp" alt="" className="size-10" />
+        <span className="h-px flex-1 bg-linear-to-l from-transparent to-border" />
+      </div>
+      <p className="mt-4 font-semibold">You've seen everything</p>
+      <p className="text-muted-foreground mt-1 text-sm">
+        {total === 1 ? 'That was the only event' : `That's all ${total} events`}. New ones are added
+        all the time.
+      </p>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="mt-3"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        <ArrowUp /> Back to top
+      </Button>
+    </div>
   );
 }
