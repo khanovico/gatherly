@@ -1,9 +1,11 @@
 import { buildApp } from './app';
 import { config } from './config';
 import { ensurePersonas } from './db/personas';
+import { seedIfStale } from './db/seed';
 
 const app = await buildApp();
 await ensurePersonas(app.db);
+if (await seedIfStale(app.db)) app.log.info('demo data seeded');
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, async () => {
