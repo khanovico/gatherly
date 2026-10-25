@@ -1,17 +1,19 @@
 import {
-  Borough,
   NEIGHBORHOODS,
   RADIUS_OPTIONS,
   type EventFormat,
   type NeighborhoodId,
   type RadiusKm,
 } from '@gatherly/shared';
-import { SlidersHorizontal } from 'lucide-react';
+import { Check, ChevronsUpDown, Globe, House, LocateFixed, SlidersHorizontal } from 'lucide-react';
+import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import { NeighborhoodCommand } from '@/components/neighborhood-command';
 import { Button } from '@/components/ui/button';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { cn } from '@/lib/utils';
 
 export type PlaceFilters = {
   format?: EventFormat;
@@ -70,26 +72,7 @@ export function FilterPanel({ value, onChange, home }: Props) {
             ['online', 'Online'],
           ]}
         />
-        <label className="block space-y-2 font-medium">
-          <span>Near</span>
-          <NativeSelect
-            value={where}
-            onChange={(e) => pickPlace(e.target.value)}
-            className="w-full font-normal [&_select]:h-10"
-          >
-            <NativeSelectOption value="">{home ? `Home · ${home}` : 'Anywhere'}</NativeSelectOption>
-            <NativeSelectOption value="me">My current location</NativeSelectOption>
-            {Borough.options.map((borough) => (
-              <optgroup key={borough} label={borough}>
-                {NEIGHBORHOODS.filter((n) => n.borough === borough).map((n) => (
-                  <NativeSelectOption key={n.id} value={n.id}>
-                    {n.name}
-                  </NativeSelectOption>
-                ))}
-              </optgroup>
-            ))}
-          </NativeSelect>
-        </label>
+        <NearPicker where={where} home={home} onPick={pickPlace} />
         <Choice
           label="Distance"
           disabled={!where && !home}
@@ -105,6 +88,57 @@ export function FilterPanel({ value, onChange, home }: Props) {
         />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Searchable "Near" combobox: home or anywhere, current location, or a neighborhood. */
+function NearPicker(props: { where: string; home?: string; onPick: (near: string) => void }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const anywhere = props.home ? `Home · ${props.home}` : 'Anywhere';
+  const label =
+    props.where === 'me'
+      ? 'My current location'
+      : (NEIGHBORHOODS.find((n) => n.id === props.where)?.name ?? anywhere);
+  const pick = (near: string) => {
+    props.onPick(near);
+    setOpen(false);
+  };
+  const extra = (value: string, Icon: typeof Globe, text: string) => (
+    <CommandItem value={text} onSelect={() => pick(value)}>
+      <Icon className="text-muted-foreground" />
+      {text}
+      <Check className={cn('ml-auto', props.where !== value && 'opacity-0')} />
+    </CommandItem>
+  );
+  return (
+    <div className="space-y-2">
+      <p id={id} className="font-medium">
+        Near
+      </p>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-labelledby={`${id} ${id}-value`}
+            className="h-10 w-full justify-between font-normal"
+          >
+            <span id={`${id}-value`} className="truncate">
+              {label}
+            </span>
+            <ChevronsUpDown className="opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+          <NeighborhoodCommand selected={props.where} onSelect={pick}>
+            {extra('', props.home ? House : Globe, anywhere)}
+            {extra('me', LocateFixed, 'My current location')}
+          </NeighborhoodCommand>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 

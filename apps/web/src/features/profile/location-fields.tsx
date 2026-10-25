@@ -1,22 +1,9 @@
-import {
-  Borough,
-  NEIGHBORHOODS,
-  RADIUS_OPTIONS,
-  type Profile,
-  type RadiusKm,
-} from '@gatherly/shared';
-import { Check, ChevronsUpDown, Loader2, LocateFixed } from 'lucide-react';
+import { NEIGHBORHOODS, RADIUS_OPTIONS, type Profile, type RadiusKm } from '@gatherly/shared';
+import { ChevronsUpDown, Loader2, LocateFixed } from 'lucide-react';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
+import { NeighborhoodCommand } from '@/components/neighborhood-command';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
@@ -83,29 +70,13 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
-              <Command>
-                <CommandInput placeholder="Search neighborhoods" />
-                <CommandList>
-                  <CommandEmpty>No neighborhood found.</CommandEmpty>
-                  {Borough.options.map((borough) => (
-                    <CommandGroup key={borough} heading={borough}>
-                      {NEIGHBORHOODS.filter((n) => n.borough === borough).map((n) => (
-                        <CommandItem
-                          key={n.id}
-                          value={`${n.name} ${n.borough}`}
-                          onSelect={() => {
-                            onChange({ neighborhood: n.id, homeLat: null, homeLng: null });
-                            setOpen(false);
-                          }}
-                        >
-                          {n.name}
-                          <Check className={cn('ml-auto', n.id !== selected?.id && 'opacity-0')} />
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  ))}
-                </CommandList>
-              </Command>
+              <NeighborhoodCommand
+                selected={selected?.id}
+                onSelect={(id) => {
+                  onChange({ neighborhood: id, homeLat: null, homeLng: null });
+                  setOpen(false);
+                }}
+              />
             </PopoverContent>
           </Popover>
           <Button variant="secondary" className="h-11" onClick={locate} disabled={locating}>

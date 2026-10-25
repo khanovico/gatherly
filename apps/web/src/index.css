@@ -7,6 +7,8 @@
 
 /* Brand: violet-indigo primary on cool, slightly tinted neutrals (hue 285). */
 :root {
+  /* Native controls (select popups, date pickers, scrollbars) follow the theme. */
+  color-scheme: light;
   --radius: 0.75rem;
   --background: oklch(0.99 0.003 285);
   --foreground: oklch(0.2 0.02 285);
@@ -32,6 +34,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.15 0.015 285);
   --foreground: oklch(0.96 0.005 285);
   --card: oklch(0.19 0.018 285);
