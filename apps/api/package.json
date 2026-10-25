@@ -8,6 +8,7 @@
     "build": "tsup",
     "start": "node --env-file-if-exists=../../.env --enable-source-maps dist/server.js",
     "typecheck": "tsc",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=../../.env src/migrate.ts"
   },
@@ -27,6 +28,7 @@
     "drizzle-kit": "^0.31.11",
     "tsup": "^9.0.0",
     "tsx": "^4.23.15",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "^5.0.5"
   }
 }
