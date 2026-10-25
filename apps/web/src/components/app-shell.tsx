@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration, useNavigation } from 'react-router';
+import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 
 export function AppShell() {
@@ -19,6 +20,7 @@ export function AppShell() {
       <main className="flex-1">
         <Outlet />
       </main>
+      <SiteFooter />
       <ScrollRestoration />
     </div>
   );
