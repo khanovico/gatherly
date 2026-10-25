@@ -4,6 +4,7 @@ import {
   TIME_SLOTS,
   type Borough,
   type Category,
+  type Persona,
 } from '@gatherly/shared';
 import type { Random } from './seed-random';
 import type { userProfiles, users } from './schema';
@@ -119,4 +120,41 @@ export const generateMembers = (random: Random, now: Date, count: number): SeedM
     const bio = profile && random.chance(0.9) ? generateBio(random, profile, createdAt) : null;
     return { name, bio, createdAt, profile };
   });
+};
+
+/** Persona bios and preferences; reset restores them so the guided demo always starts the same. */
+export const PERSONA_PROFILES: Record<Persona, { bio: string; profile: Profile }> = {
+  attendee: {
+    bio: 'Backend engineer in Williamsburg. Weeknight meetups, weekend hikes and a long list of ramen spots to try.',
+    profile: {
+      interests: ['tech', 'food', 'outdoors'],
+      tags: ['machine-learning', 'ramen', 'hiking'],
+      neighborhood: 'williamsburg',
+      radiusKm: 10,
+      formats: ['in_person', 'online'],
+      timeSlots: ['weeknights', 'weekends'],
+    },
+  },
+  organizer: {
+    bio: 'Community organizer in the East Village. I host cooking nights, photo walks and small workshops where people actually talk to each other.',
+    profile: {
+      interests: ['community', 'food', 'arts', 'design'],
+      tags: ['cooking', 'photography', 'volunteering'],
+      neighborhood: 'east-village',
+      radiusKm: 25,
+      formats: ['in_person', 'online'],
+      timeSlots: ['weeknights', 'weekends'],
+    },
+  },
+  admin: {
+    bio: 'Keeps Gatherly running. Product and platform, Midtown.',
+    profile: {
+      interests: ['tech', 'business', 'design'],
+      tags: ['startups', 'design-systems'],
+      neighborhood: 'midtown',
+      radiusKm: 5,
+      formats: ['in_person', 'online'],
+      timeSlots: ['weekday_daytime', 'weeknights'],
+    },
+  },
 };

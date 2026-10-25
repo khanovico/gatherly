@@ -1,9 +1,10 @@
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from './client';
+import type { Persona } from '@gatherly/shared';
 import { PERSONAS, ensurePersonas } from './personas';
 import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
 import { DEMO_EVENTS } from './seed-data';
-import { generateMembers } from './seed-members';
+import { PERSONA_PROFILES, generateMembers } from './seed-members';
 import { createRandom } from './seed-random';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -33,6 +34,21 @@ const localTime = (now: Date, days: number, at: string, timeZone: string) => {
   return new Date(+wall - (+inZone - +inUtc));
 };
 
+const resetPersonaProfiles = async (tx: Tx, now: Date) => {
+  for (const [persona, { bio, profile }] of Object.entries(PERSONA_PROFILES)) {
+    const [user] = await tx
+      .update(users)
+      .set({ bio })
+      .where(eq(users.email, PERSONAS[persona as Persona].email))
+      .returning({ id: users.id });
+    const row = { homeLat: null, homeLng: null, ...profile, userId: user!.id, onboardedAt: now };
+    await tx
+      .insert(userProfiles)
+      .values(row)
+      .onConflictDoUpdate({ target: userProfiles.userId, set: row });
+  }
+};
+
 const insertDemoContent = async (tx: Tx, now: Date) => {
   const random = createRandom(20_261_026);
   const seeds = generateMembers(random, now, MEMBER_COUNT);
@@ -47,6 +63,7 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     .values(
       seeds.flatMap(({ profile }, i) => (profile ? [{ ...profile, userId: members[i]!.id }] : [])),
     );
+  await resetPersonaProfiles(tx, now);
   const [premium] = await tx.select({ id: plans.id }).from(plans).where(eq(plans.code, 'premium'));
   const organizers = new Set(DEMO_EVENTS.map((e) => e.organizer));
   const organizerPlans = members
