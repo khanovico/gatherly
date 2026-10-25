@@ -1,4 +1,4 @@
-import type { Me, Persona, UserSummary } from '@gatherly/shared';
+import type { Me, Persona, SignupInput, UserSummary } from '@gatherly/shared';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -34,6 +34,30 @@ export function useDemoLogin(next?: string) {
       switchIdentity(queryClient, me);
       toast.success(`Signed in as ${me.user.name}`);
     },
+  });
+}
+
+/**
+ * Email and password sign-in or sign-up. Anyone not onboarded yet (every new account) goes to
+ * onboarding. `onError` replaces the global toast so forms can show errors inline.
+ */
+export function usePasswordAuth(
+  mode: 'signin' | 'signup',
+  next?: string,
+  onError?: (error: unknown) => void,
+) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  return useMutation({
+    // Sign-in ignores `name`.
+    mutationFn: (body: SignupInput) => apiFetch<Me>(`/auth/${mode}`, { method: 'POST', body }),
+    onSuccess: (me) => {
+      navigate(me.onboardingPending ? '/onboarding' : (next ?? '/events'));
+      switchIdentity(queryClient, me);
+      const greeting = mode === 'signup' ? 'Welcome to Gatherly' : 'Welcome back';
+      toast.success(`${greeting}, ${me.user.name.split(' ')[0]}!`);
+    },
+    onError,
   });
 }
 

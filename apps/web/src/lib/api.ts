@@ -57,6 +57,8 @@ const messages: Partial<Record<ErrorCode, string>> = {
   ALREADY_REGISTERED: "You're already registered for this event.",
   PROTECTED_DEMO_ACCOUNT: 'Demo personas are protected and cannot be changed.',
   COMING_SOON: 'Coming soon — this is not available yet.',
+  INVALID_CREDENTIALS: 'Email or password is incorrect.',
+  EMAIL_TAKEN: 'An account with this email already exists.',
 };
 
 /** User-facing copy for any thrown error: known codes first, then the API's detail. */

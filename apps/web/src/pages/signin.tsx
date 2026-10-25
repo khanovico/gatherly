@@ -1,11 +1,11 @@
 import { Persona } from '@gatherly/shared';
-import { Check, Loader2, LogIn, Sparkles, UserPlus } from 'lucide-react';
+import { Check, Loader2, LogIn, Sparkles } from 'lucide-react';
 import { useSearchParams } from 'react-router';
-import { ComingSoonDialog } from '@/components/coming-soon-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AuthCard } from '@/features/auth/auth-card';
 import { personaInfo } from '@/features/auth/personas';
 import { useDemoLogin, usePersonas } from '@/features/auth/use-demo-login';
 
@@ -15,19 +15,32 @@ const safeNext = (next: string | null) =>
 
 export function Component() {
   const [params] = useSearchParams();
-  const login = useDemoLogin(safeNext(params.get('next')));
+  const next = safeNext(params.get('next'));
+  const login = useDemoLogin(next);
   const { data: personas } = usePersonas();
 
   return (
     <section className="page-container py-12 sm:py-20">
-      <div className="mx-auto max-w-3xl text-center">
+      <div className="mx-auto grid max-w-5xl items-center gap-10 lg:grid-cols-2">
+        <div className="text-center lg:text-left">
+          <img src="/images/brand/mark.webp" alt="" className="mx-auto size-14 lg:mx-0" />
+          <h1 className="mt-4 text-4xl font-semibold sm:text-5xl">
+            Find your people, <span className="text-brand">one event at a time</span>
+          </h1>
+          <p className="text-muted-foreground mt-4 text-lg">
+            Sign in or create a free account. Tell us what you like and Discover picks events for
+            you.
+          </p>
+        </div>
+        <AuthCard initialMode={params.get('mode') === 'signup' ? 'signup' : 'signin'} next={next} />
+      </div>
+
+      <div className="mx-auto mt-20 max-w-3xl text-center">
         <Badge variant="secondary">
           <Sparkles /> Live demo · no password needed
         </Badge>
-        <h1 className="mt-4 text-4xl font-semibold sm:text-5xl">
-          Choose who you want <span className="text-brand">to be today</span>
-        </h1>
-        <p className="text-muted-foreground mt-4 text-lg">
+        <h2 className="mt-4 text-3xl font-semibold">Try a demo account</h2>
+        <p className="text-muted-foreground mt-2">
           Each persona is a real account with its own permissions. Switch any time from the header.
         </p>
       </div>
@@ -46,7 +59,7 @@ export function Component() {
                     className="ring-card size-28 rounded-full shadow-md ring-4"
                   />
                   <div className="space-y-1">
-                    <h2 className="text-xl font-semibold">{user.name}</h2>
+                    <h3 className="text-xl font-semibold">{user.name}</h3>
                     <Badge variant="outline">{info.badge}</Badge>
                     <p className="text-muted-foreground pt-1 text-sm">{info.tagline}</p>
                   </div>
@@ -79,19 +92,6 @@ export function Component() {
             <Skeleton key={persona} className="h-[26rem] rounded-xl" />
           ))}
       </ul>
-
-      <p className="text-muted-foreground mt-10 text-center text-sm">
-        Want your own account?
-        <ComingSoonDialog
-          title="Sign-up is on the way"
-          description="Real accounts will use a hosted identity provider (single sign-on, passwords, email verification). Until then, explore Gatherly with the demo personas."
-          trigger={
-            <Button variant="link" className="ml-1 h-auto p-0">
-              <UserPlus /> Sign up
-            </Button>
-          }
-        />
-      </p>
     </section>
   );
 }
