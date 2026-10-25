@@ -27,7 +27,9 @@ const triggerTestErrors = () =>
       `Diagnostic test error from the browser at ${new Date().toISOString()}`,
     );
     error.name = 'DiagnosticTestError';
-    const webEventId = Sentry.captureException(error);
+    const webEventId = Sentry.captureException(error, {
+      fingerprint: ['diagnostic-test-error', 'web'],
+    });
     const res = await fetch('/api/v1/admin/diagnostics/error', { method: 'POST' });
     const body = await res.json().catch(() => ({}));
     if (res.status !== 500) throw new Error(body.detail ?? 'Could not trigger the API test error.');

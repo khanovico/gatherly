@@ -227,7 +227,9 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       `Diagnostic test error from the admin console at ${new Date().toISOString()}`,
     );
     error.name = 'DiagnosticTestError';
-    const sentryEventId = Sentry.captureException(error);
+    const sentryEventId = Sentry.captureException(error, {
+      fingerprint: ['diagnostic-test-error', 'api'],
+    });
     request.log.error({ err: error }, 'diagnostic test error');
     return reply
       .status(500)

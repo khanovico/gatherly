@@ -52,6 +52,16 @@ if (config.SENTRY_DSN_API) {
       ...defaults.filter((integration) => integration.name !== 'Fastify'),
       Sentry.openTelemetryIntegration(),
     ],
+    // Behind Replit's proxy a request also carries the client IP, the session cookie and the
+    // visitor's Replit profile headers. Collect only headers that identify nobody.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: {
+        allow: ['accept', 'content-type', 'user-agent', 'traceparent', 'sentry-trace'],
+      },
+      httpBodies: [],
+    },
   });
 }
 
