@@ -10,6 +10,7 @@ import { LocationFields } from '@/features/profile/location-fields';
 import { ProfileAvatar } from '@/features/profile/profile-avatar';
 import { useUpdateProfile } from '@/features/profile/queries';
 import { ScheduleFields } from '@/features/profile/schedule-fields';
+import { TagPicker } from '@/features/profile/tag-picker';
 
 const BIO_MAX = 280;
 type Draft = Omit<Profile, 'onboardedAt'>;
@@ -105,6 +106,13 @@ export function ProfileEditor({ me, profile }: { me: Me; profile: Profile }) {
             Pick at least {MIN_INTERESTS} interests.
           </p>
         )}
+        <div className="mt-8">
+          <TagPicker
+            value={draft.tags}
+            interests={draft.interests}
+            onChange={(tags) => update({ tags })}
+          />
+        </div>
       </Section>
       <Section
         title="Location"

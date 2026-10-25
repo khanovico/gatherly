@@ -9,6 +9,7 @@ import { InterestPicker, MIN_INTERESTS } from '@/features/profile/interest-picke
 import { LocationFields } from '@/features/profile/location-fields';
 import { useUpdateProfile } from '@/features/profile/queries';
 import { ScheduleFields } from '@/features/profile/schedule-fields';
+import { TagPicker } from '@/features/profile/tag-picker';
 import { cn } from '@/lib/utils';
 
 export type Draft = Omit<Profile, 'bio' | 'onboardedAt'>;
@@ -27,7 +28,14 @@ const steps: Step[] = [
     title: 'What are you into?',
     description: 'Pick at least three. Your For you feed starts here.',
     body: (draft, update) => (
-      <InterestPicker value={draft.interests} onChange={(interests) => update({ interests })} />
+      <div className="space-y-10">
+        <InterestPicker value={draft.interests} onChange={(interests) => update({ interests })} />
+        <TagPicker
+          value={draft.tags}
+          interests={draft.interests}
+          onChange={(tags) => update({ tags })}
+        />
+      </div>
     ),
     missing: ({ interests }) => {
       const left = MIN_INTERESTS - interests.length;
@@ -72,7 +80,7 @@ export function OnboardingWizard({ profile, firstName }: { profile: Profile; fir
     save.mutate({ ...input, onboarded: true }, { onSuccess: () => (notify(), navigate(to)) });
   const finish = () =>
     complete(draft, '/events?sort=for_you', () =>
-      toast.success(`Welcome to Gatherly, ${firstName}!`, {
+      toast.success(`You're all set, ${firstName}!`, {
         description: 'Your For you feed is ready.',
       }),
     );
