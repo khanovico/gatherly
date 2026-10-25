@@ -1,8 +1,10 @@
 import {
+  EventStatus,
   adminStats,
   adminUser,
   adminUserPatch,
   eventListQuery,
+  eventSummary,
   paginated,
   type AdminUserPatch,
 } from '@gatherly/shared';
@@ -10,11 +12,13 @@ import { and, asc, desc, eq, gt, ilike, inArray, or } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { events, plans, registrations, subscriptions, users } from '../../db/schema';
+import { resetDemo } from '../../db/seed';
 import { AppError } from '../../lib/errors';
 import { requireAdmin } from '../../lib/guards';
 
 const params = z.object({ id: z.uuid() });
 const userListQuery = eventListQuery.pick({ q: true, page: true, pageSize: true });
+const eventAdminQuery = userListQuery.extend({ status: EventStatus.optional() });
 
 const likePattern = (q?: string) => q && `%${q.replace(/[\\%_]/g, '\\$&')}%`;
 
@@ -175,6 +179,40 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       return toAdminUser(updated!);
     },
   );
+
+  app.get(
+    '/admin/events',
+    { schema: { querystring: eventAdminQuery, response: { 200: paginated(eventSummary) } } },
+    async (request) => {
+      const { q, status, page, pageSize } = request.query;
+      const pattern = likePattern(q);
+      const where = and(
+        status ? eq(events.status, status) : undefined,
+        pattern ? or(ilike(events.title, pattern), ilike(events.summary, pattern)) : undefined,
+      );
+      const [rows, total] = await Promise.all([
+        app.db
+          .select()
+          .from(events)
+          .where(where)
+          .orderBy(desc(events.startsAt), asc(events.id))
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        app.db.$count(events, where),
+      ]);
+      const items = rows.map((row) => ({
+        ...row,
+        startsAt: row.startsAt.toISOString(),
+        endsAt: row.endsAt.toISOString(),
+      }));
+      return { items, page, pageSize, total };
+    },
+  );
+
+  app.post('/admin/demo/reset', async (_request, reply) => {
+    await resetDemo(app.db);
+    return reply.status(204).send();
+  });
 };
 
 export default adminRoutes;
