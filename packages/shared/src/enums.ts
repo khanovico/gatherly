@@ -109,6 +109,9 @@ export const ErrorCode = z.enum([
   'EMAIL_TAKEN',
   'INVALID_CREDENTIALS',
   'RATE_LIMITED',
+  'METHOD_NOT_ALLOWED',
+  'PAYLOAD_TOO_LARGE',
+  'UNSUPPORTED_MEDIA_TYPE',
   'INTERNAL',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;

@@ -65,7 +65,7 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       // 409 EMAIL_TAKEN tells whether an email has an account; the IP limit keeps that slow.
       onRequest: rateLimit({ max: 10, windowMs: 60 * MINUTE_MS }),
-      schema: { body: signupInput, response: { 200: me } },
+      schema: { body: signupInput, response: { 201: me } },
     },
     async (request, reply) => {
       const { name, email, password } = request.body;
@@ -85,7 +85,7 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
       if (!row) throw new AppError('EMAIL_TAKEN', 409, 'An account with this email already exists');
       await endSession(app.db, reply, request.cookies[SESSION_COOKIE]);
       request.user = await startSession(app.db, reply, row.id);
-      return toMe(app.db, requireUser(request));
+      return reply.status(201).send(await toMe(app.db, requireUser(request)));
     },
   );
 

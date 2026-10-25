@@ -16,7 +16,7 @@ it('signs up, signs in with the password, and rejects bad or duplicate credentia
   const account = { name: 'New Member', email, password: 'correct horse' };
 
   const signup = await post('signup', { ...account, email: email.toUpperCase() });
-  expect(signup.statusCode).toBe(200);
+  expect(signup.statusCode).toBe(201);
   expect(signup.json()).toMatchObject({ user: { email }, plan: 'free', onboardingPending: true });
   const me = await ctx.app.inject({
     url: '/api/v1/me',
@@ -62,4 +62,22 @@ it('limits sign-in per account across IPs and ignores a forged X-Forwarded-For',
     forwardedFor: '203.0.113.7',
   });
   expect(forged.statusCode).toBe(429);
+});
+
+it('answers wrong method, oversized and non-JSON bodies with their own codes', async () => {
+  const outcome = (res: Awaited<ReturnType<typeof post>>) => [res.statusCode, res.json().code];
+  const wrongMethod = await ctx.app.inject({ method: 'GET', url: '/api/v1/auth/signin' });
+  expect(outcome(wrongMethod)).toEqual([405, 'METHOD_NOT_ALLOWED']);
+  expect(wrongMethod.headers.allow).toBe('POST');
+  expect(outcome(await post('signin', { email: 'x'.repeat(2_000_000) }))).toEqual([
+    413,
+    'PAYLOAD_TOO_LARGE',
+  ]);
+  const text = await ctx.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/signin',
+    headers: { 'content-type': 'application/xml' },
+    payload: '<hi/>',
+  });
+  expect(outcome(text)).toEqual([415, 'UNSUPPORTED_MEDIA_TYPE']);
 });

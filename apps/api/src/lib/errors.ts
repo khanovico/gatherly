@@ -34,6 +34,8 @@ const codeForStatus: Partial<Record<number, ErrorCode>> = {
   401: 'UNAUTHENTICATED',
   403: 'FORBIDDEN',
   404: 'NOT_FOUND',
+  413: 'PAYLOAD_TOO_LARGE',
+  415: 'UNSUPPORTED_MEDIA_TYPE',
 };
 
 const toProblem = (error: unknown): Problem => {
@@ -72,12 +74,26 @@ export const registerErrorHandling = (app: FastifyInstance) => {
   });
 };
 
-/** 404 for unknown API routes. Scoped to `/api` so the SPA fallback can own the rest. */
+/**
+ * 404 for unknown API routes, 405 (with `Allow`) when the path exists under other methods.
+ * Scoped to `/api` so the SPA fallback can own the rest.
+ */
 export const registerApiNotFound = (api: FastifyInstance) => {
-  api.setNotFoundHandler((request, reply) =>
-    reply
-      .status(404)
+  const routes: { pattern: RegExp; methods: string[] }[] = [];
+  api.addHook('onRoute', ({ url, method }) => {
+    const source = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:\w+/g, '[^/]+');
+    routes.push({ pattern: new RegExp(`^${source}$`), methods: [method].flat() });
+  });
+  api.setNotFoundHandler((request, reply) => {
+    const path = request.url.split('?')[0]!;
+    const allowed = routes.filter((r) => r.pattern.test(path)).flatMap((r) => r.methods);
+    const [status, code] = allowed.length
+      ? ([405, 'METHOD_NOT_ALLOWED'] as const)
+      : ([404, 'NOT_FOUND'] as const);
+    if (allowed.length) reply.header('allow', [...new Set(allowed)].join(', '));
+    return reply
+      .status(status)
       .type('application/problem+json')
-      .send(problem(404, 'NOT_FOUND', `No route for ${request.method} ${request.url}`)),
-  );
+      .send(problem(status, code, `No route for ${request.method} ${path}`));
+  });
 };
