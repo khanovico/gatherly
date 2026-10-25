@@ -11,12 +11,16 @@ const cancellations = meter.createCounter('cancellations', {
   description: 'Registrations cancelled',
 });
 const eventsCreated = meter.createCounter('events_created', { description: 'Events created' });
+const saves = meter.createCounter('saves', { description: 'Events saved' });
+const hides = meter.createCounter('hides', { description: 'Events hidden (Not interested)' });
 
 // Start every series at 0, so the dashboard's increase() also counts the first event after a restart.
 for (const result of ['confirmed', 'EVENT_FULL', 'ALREADY_REGISTERED', 'EVENT_STARTED'] as const)
   registrations.add(0, { result });
 cancellations.add(0);
 eventsCreated.add(0);
+saves.add(0);
+hides.add(0);
 
 /** Business counters for the Grafana dashboard. HTTP RED metrics come from the http instrumentation. */
 export const businessMetrics = {
@@ -24,4 +28,6 @@ export const businessMetrics = {
   registration: (result: 'confirmed' | ErrorCode) => registrations.add(1, { result }),
   cancellation: () => cancellations.add(1),
   eventCreated: () => eventsCreated.add(1),
+  save: () => saves.add(1),
+  hide: () => hides.add(1),
 };
