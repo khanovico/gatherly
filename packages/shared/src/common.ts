@@ -15,6 +15,12 @@ export const problem = z.object({
 });
 export type Problem = z.infer<typeof problem>;
 
+/** `?page&pageSize` on every list endpoint: 1-based, at most 50 per page. */
+export const pageQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+});
+
 export const paginated = <T extends z.ZodType>(item: T) =>
   z.object({
     items: z.array(item),

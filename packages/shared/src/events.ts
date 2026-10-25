@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isoDateTime, paginated } from './common';
+import { isoDateTime, pageQuery, paginated } from './common';
 import {
   Category,
   EventFormat,
@@ -95,8 +95,7 @@ export const eventListQuery = locationQuery.extend({
   to: isoDateTime.optional(),
   sort: SortOrder.optional(),
   radiusKm: z.coerce.number().pipe(RadiusKm).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+  ...pageQuery.shape,
 });
 export type EventListQuery = z.infer<typeof eventListQuery>;
 
@@ -158,10 +157,17 @@ export type EventDetail = z.infer<typeof eventDetail>;
 export const myRegistration = registration.extend({ event: eventSummary });
 export type MyRegistration = z.infer<typeof myRegistration>;
 
-/** `GET /me/registrations`: active registrations; upcoming soonest first, past most recent first. */
-export const myRegistrations = z.object({
-  upcoming: z.array(myRegistration),
-  past: z.array(myRegistration),
+export const myRegistrationsQuery = pageQuery.extend({
+  when: z.enum(['upcoming', 'past']).default('upcoming'),
+});
+export type MyRegistrationsQuery = z.infer<typeof myRegistrationsQuery>;
+
+/**
+ * `GET /me/registrations?when&page&pageSize`: one page of active registrations; upcoming soonest
+ * first, past most recent first. `counts` sizes both tabs.
+ */
+export const myRegistrations = paginated(myRegistration).extend({
+  counts: z.object({ upcoming: z.int().min(0), past: z.int().min(0) }),
 });
 export type MyRegistrations = z.infer<typeof myRegistrations>;
 

@@ -40,7 +40,7 @@ it('follows the brief: register, full, cancel frees the seat, re-register', asyn
     url: '/api/v1/me/registrations',
     headers: { cookie: attendee.cookie },
   });
-  expect(mine.json().upcoming.map((r: { eventId: string }) => r.eventId)).toContain(event.id);
+  expect(mine.json().items.map((r: { eventId: string }) => r.eventId)).toContain(event.id);
 });
 
 it('never overbooks: 25 parallel registrations for 10 seats', async () => {

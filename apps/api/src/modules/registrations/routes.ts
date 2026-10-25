@@ -1,5 +1,5 @@
-import { myRegistrations, registration, type MyRegistration } from '@gatherly/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { myRegistrations, myRegistrationsQuery, registration } from '@gatherly/shared';
+import { and, asc, count, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { events, registrations } from '../../db/schema';
@@ -47,24 +47,43 @@ const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/me/registrations',
-    { schema: { response: { 200: myRegistrations } } },
+    { schema: { querystring: myRegistrationsQuery, response: { 200: myRegistrations } } },
     async (request) => {
       const user = requireUser(request);
-      const rows = await app.db
-        .select({ registration: registrations, event: events })
-        .from(registrations)
-        .innerJoin(events, eq(events.id, registrations.eventId))
-        .where(
-          and(eq(registrations.userId, user.id), inArray(registrations.status, ACTIVE_STATUSES)),
-        )
-        .orderBy(asc(events.startsAt));
-      const items: MyRegistration[] = rows.map((r) => ({
+      const { when, page, pageSize } = request.query;
+      const now = new Date();
+      const mine = and(
+        eq(registrations.userId, user.id),
+        inArray(registrations.status, ACTIVE_STATUSES),
+      );
+      const upcoming = gt(events.startsAt, now);
+      const [rows, [counts]] = await Promise.all([
+        app.db
+          .select({ registration: registrations, event: events })
+          .from(registrations)
+          .innerJoin(events, eq(events.id, registrations.eventId))
+          .where(and(mine, when === 'upcoming' ? upcoming : lte(events.startsAt, now)))
+          .orderBy(
+            when === 'upcoming' ? asc(events.startsAt) : desc(events.startsAt),
+            asc(registrations.id),
+          )
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        app.db
+          .select({
+            upcoming: sql<number>`count(*) filter (where ${upcoming})`.mapWith(Number),
+            all: count(),
+          })
+          .from(registrations)
+          .innerJoin(events, eq(events.id, registrations.eventId))
+          .where(mine),
+      ]);
+      const items = rows.map((r) => ({
         ...toRegistration(r.registration),
         event: toEventSummary(r.event),
       }));
-      const now = Date.now();
-      const started = (r: MyRegistration) => Date.parse(r.event.startsAt) <= now;
-      return { upcoming: items.filter((r) => !started(r)), past: items.filter(started).reverse() };
+      const tabs = { upcoming: counts!.upcoming, past: counts!.all - counts!.upcoming };
+      return { items, page, pageSize, total: tabs[when], counts: tabs };
     },
   );
 };

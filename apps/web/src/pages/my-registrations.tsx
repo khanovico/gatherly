@@ -1,8 +1,9 @@
 import type { MyRegistrations } from '@gatherly/shared';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Compass } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
+import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { RequireSignIn } from '@/components/require-entitlement';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,10 +37,16 @@ export function Component() {
 function MyTickets() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get('tab') === 'past' ? 'past' : 'upcoming';
-  const { data, isPending, isError } = useQuery({
-    queryKey: queryKeys.my.registrations,
-    queryFn: () => apiFetch<MyRegistrations>('/me/registrations'),
+  const { data, isPending, isError, hasNextPage, isFetching, fetchNextPage } = useInfiniteQuery({
+    queryKey: [...queryKeys.my.registrations, tab],
+    queryFn: ({ pageParam }) =>
+      apiFetch<MyRegistrations>(`/me/registrations?when=${tab}&page=${pageParam}&pageSize=12`),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
   });
+  const counts = data?.pages[0]?.counts;
+  const tickets = data?.pages.flatMap((page) => page.items) ?? [];
 
   const findEvents = (
     <Button asChild className="bg-brand hover:opacity-90">
@@ -70,9 +77,7 @@ function MyTickets() {
           {(Object.keys(tabs) as Tab[]).map((key) => (
             <TabsTrigger key={key} value={key}>
               {tabs[key].label}
-              {data && (
-                <span className="text-muted-foreground tabular-nums">{data[key].length}</span>
-              )}
+              {counts && <span className="text-muted-foreground tabular-nums">{counts[key]}</span>}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -85,8 +90,8 @@ function MyTickets() {
               title="We couldn't load your tickets"
               description="Check your connection and refresh the page."
             />
-          ) : data[tab].length ? (
-            data[tab].map((registration) => (
+          ) : tickets.length ? (
+            tickets.map((registration) => (
               <TicketCard key={registration.id} registration={registration} past={tab === 'past'} />
             ))
           ) : (
@@ -100,6 +105,10 @@ function MyTickets() {
           )}
         </TabsContent>
       </Tabs>
+      <LoadMoreSentinel
+        onVisible={() => void fetchNextPage()}
+        disabled={!hasNextPage || isFetching || isError}
+      />
     </section>
   );
 }
