@@ -17,6 +17,7 @@ import {
   friendlyErrors,
   type EventFormValues,
 } from '@/features/organizer/event-form-schema';
+import { EventPreview } from '@/features/organizer/event-preview';
 import { FormField, Section } from '@/features/organizer/form-field';
 import { ApiError, errorMessage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -32,9 +33,16 @@ type EventFormProps = {
   submitLabel: string;
   /** Throws `ApiError` on rejection; field errors are mapped back onto the form. */
   onSubmit: (input: CreateEventInput) => Promise<unknown>;
+  /** Seats already taken, for the preview's seat meter when editing. */
+  registeredCount?: number;
 };
 
-export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormProps) {
+export function EventForm({
+  defaultValues,
+  submitLabel,
+  onSubmit,
+  registeredCount,
+}: EventFormProps) {
   const form = useForm({
     defaultValues,
     resolver: zodResolver(eventFormSchema, { error: friendlyErrors }),
@@ -215,6 +223,7 @@ export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormPro
           </Button>
         </div>
       </form>
+      <EventPreview registeredCount={registeredCount} />
     </FormProvider>
   );
 }
