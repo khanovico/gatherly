@@ -1,4 +1,9 @@
-import { createEventInput, type Category, type EventFormat } from '@gatherly/shared';
+import {
+  createEventInput,
+  type Category,
+  type EventDetail,
+  type EventFormat,
+} from '@gatherly/shared';
 import { z } from 'zod';
 import { fromZonedLocal, toZonedLocal } from '@/features/organizer/zoned-time';
 
@@ -17,7 +22,7 @@ export type EventFormValues = {
   endsAt: string;
   timezone: string;
   capacity: number;
-  /** '' lets the API pick the category's cover. */
+  /** '' means the category's first cover. */
   coverImage: string;
 };
 
@@ -29,7 +34,7 @@ export const eventFormSchema = z
     startsAt: fromZonedLocal(values.startsAt, values.timezone),
     endsAt: fromZonedLocal(values.endsAt, values.timezone),
     onlineUrl: values.onlineUrl.trim() || undefined,
-    coverImage: values.coverImage || undefined,
+    coverImage: values.coverImage || `/images/covers/${values.category}-1.webp`,
   }))
   .pipe(createEventInput);
 
@@ -71,5 +76,25 @@ export function newEventForm(): EventFormValues {
     timezone: viewerTimeZone,
     capacity: 50,
     coverImage: '',
+  };
+}
+
+/** A stored event as form values, with times shown in the event's own timezone. */
+export function eventToForm(event: EventDetail): EventFormValues {
+  return {
+    title: event.title,
+    summary: event.summary,
+    description: event.description,
+    category: event.category,
+    format: event.format,
+    venueName: event.venueName ?? '',
+    address: event.address ?? '',
+    city: event.city ?? '',
+    onlineUrl: event.onlineUrl ?? '',
+    startsAt: toZonedLocal(Date.parse(event.startsAt), event.timezone),
+    endsAt: toZonedLocal(Date.parse(event.endsAt), event.timezone),
+    timezone: event.timezone,
+    capacity: event.capacity,
+    coverImage: event.coverImage,
   };
 }

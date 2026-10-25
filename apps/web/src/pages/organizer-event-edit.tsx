@@ -1,6 +1,10 @@
-import { PencilLine } from 'lucide-react';
-import { PagePlaceholder } from '@/components/page-placeholder';
+import { RequireEntitlement } from '@/components/require-entitlement';
+import { EditEventPage } from '@/features/organizer/edit-event-page';
 
 export function Component() {
-  return <PagePlaceholder title="Edit event" icon={PencilLine} />;
+  return (
+    <RequireEntitlement entitlement="events:create">
+      <EditEventPage />
+    </RequireEntitlement>
+  );
 }
