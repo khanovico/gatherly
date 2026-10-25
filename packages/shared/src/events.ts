@@ -41,14 +41,23 @@ const eventFields = z.object({
   coverImage: z.string().startsWith('/images/').optional(),
 });
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_LEAD_MS = 2 * 365 * DAY_MS;
+const MAX_DURATION_MS = 7 * DAY_MS;
+
 /** Rules that span fields. Each applies only when its fields are present, so it also fits patches. */
 const checkEventRules = (event: Partial<z.infer<typeof eventFields>>, ctx: z.RefinementCtx) => {
   const issue = (path: string, message: string) =>
     ctx.addIssue({ code: 'custom', path: [path], message });
   const starts = event.startsAt ? Date.parse(event.startsAt) : undefined;
+  const ends = event.endsAt ? Date.parse(event.endsAt) : undefined;
   if (starts !== undefined && starts <= Date.now()) issue('startsAt', 'Must be in the future');
-  if (starts !== undefined && event.endsAt && Date.parse(event.endsAt) <= starts)
-    issue('endsAt', 'Must be after the start');
+  if (starts !== undefined && starts > Date.now() + MAX_LEAD_MS)
+    issue('startsAt', 'Must be within the next 2 years');
+  if (starts !== undefined && ends !== undefined) {
+    if (ends <= starts) issue('endsAt', 'Must be after the start');
+    else if (ends - starts > MAX_DURATION_MS) issue('endsAt', 'Events can last at most 7 days');
+  }
   if (event.format === 'online' && !event.onlineUrl)
     issue('onlineUrl', 'Required for online events');
   if (event.format === 'in_person') {

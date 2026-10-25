@@ -8,6 +8,7 @@ beforeAll(async () => {
 afterAll(() => ctx.close());
 
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 const valid = {
   title: 'Validation meetup',
@@ -25,6 +26,27 @@ const valid = {
 it.each([
   ['ends before it starts', { endsAt: iso(47 * HOUR_MS) }, 400, 'VALIDATION_FAILED', ['endsAt']],
   ['starts in the past', { startsAt: iso(-HOUR_MS) }, 400, 'VALIDATION_FAILED', ['startsAt']],
+  [
+    'starts more than 2 years out',
+    { startsAt: iso(800 * DAY_MS), endsAt: iso(800 * DAY_MS + HOUR_MS) },
+    400,
+    'VALIDATION_FAILED',
+    ['startsAt'],
+  ],
+  [
+    'lasts over 7 days',
+    { endsAt: iso(48 * HOUR_MS + 8 * DAY_MS) },
+    400,
+    'VALIDATION_FAILED',
+    ['endsAt'],
+  ],
+  [
+    'has a short title and ends before it starts',
+    { title: 'x', endsAt: iso(47 * HOUR_MS) },
+    400,
+    'VALIDATION_FAILED',
+    ['title', 'endsAt'],
+  ],
   ['has no seats', { capacity: 0 }, 400, 'VALIDATION_FAILED', ['capacity']],
   ['has too many seats', { capacity: 10_001 }, 400, 'VALIDATION_FAILED', ['capacity']],
   ['sells tickets', { priceCents: 500 }, 422, 'PAID_TICKETS_UNAVAILABLE', undefined],
