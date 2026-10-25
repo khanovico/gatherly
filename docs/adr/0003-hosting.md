@@ -35,4 +35,4 @@ Deploy one Replit Autoscale app on the free Starter plan, with Replit's built-in
 - One artifact to build and deploy; simplest possible operations.
 - Not production-grade: no minimum warm instances, no environment separation, no point-in-time recovery guarantees.
 
-**Revisit when** real users arrive: move to a container platform (Cloud Run, ECS or Fly) with minimum instances, separate staging and production, managed Postgres with backups and point-in-time recovery, and the SPA behind a CDN.
+**Revisit when** real users arrive: move to a container platform (Cloud Run, ECS or Fly) with minimum instances, separate staging and production, managed Postgres with backups and point-in-time recovery, and the SPA behind a CDN. The target topology is in [ADR 0011](0011-production-topology.md).

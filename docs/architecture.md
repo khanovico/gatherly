@@ -16,7 +16,7 @@ Every question in the brief, the short answer, and where the long answer lives.
 | How user types access the system | Role (member or admin), plan entitlement (`events:create` makes an organizer) and ownership, all enforced by API guards | [Access control](#6-access-control), [permission matrix](#permission-matrix) |
 | Technology choices for an MVP | TypeScript end to end with one shared schema package; Postgres does capacity, search and sessions, so no extra infrastructure | [Decisions](#decisions-at-a-glance), [ADRs](adr/README.md) |
 | MVP versus later | Core workflow, authorization, telemetry and a payment-ready schema now; payments, notifications, native apps and learned ranking later | [MVP versus later](#7-mvp-versus-later), [roadmap](roadmap.md) |
-| Scaling, security, third parties | Each pressure point has a next step and a trigger; the UI is never the security boundary; every vendor sits behind a small interface | Sections [8](#8-scaling-considerations), [9](#9-security-considerations), [10](#10-third-party-integrations) |
+| Scaling, security, third parties | Each pressure point has a next step and a trigger; the UI is never the security boundary; every vendor sits behind a small interface | Sections [8](#8-scaling-considerations), [9](#9-security-considerations), [10](#10-third-party-integrations), [12](#12-production-topology) |
 | Create event, register, refuse when full, cancel | REST endpoints; one conditional update in one transaction decides who gets the last seat | [Request flow](#3-request-flow-register-with-capacity), [API](api.md) |
 | Persistence, validation, error handling | Postgres with check constraints and a partial unique index; Zod at the boundary; RFC 9457 problem details with stable codes | [Domain rules](#domain-rules), [error codes](api.md#error-codes) |
 | Describe role-based authorization | Designed and implemented in guards, not only described | [Access control](#6-access-control), [ADR 0005](adr/0005-authorization-model.md) |
@@ -36,6 +36,7 @@ Every question in the brief, the short answer, and where the long answer lives.
 | Telemetry | OpenTelemetry direct to Grafana Cloud; errors to Sentry | Mature signals on free tiers, no collector to host | No tail sampling; exporter runs in the app process | [0007](adr/0007-telemetry.md) |
 | Ranking | Rule-based "For you" ranker behind a `Ranker` interface, versioned, with reasons per result | Works with no behavior data, explainable, testable; a model can replace it without contract changes | Hand-tuned weights until real data exists | [0009](adr/0009-rule-based-ranker.md) |
 | Interaction data | First-party, append-only interactions table (impressions to registrations) with ranker version and position | Lets us evaluate rankers offline and train models later | Personal data to protect; retention and consent rules apply | [0010](adr/0010-interaction-data.md) |
+| Production topology | Same container on a managed platform (ECS Fargate or Cloud Run) behind CDN, WAF and load balancer; managed Postgres, Redis, queue and workers added by trigger | No rewrite between demo and production; every "not yet" has a signal | Terraform and a data move off Replit when real users arrive | [0011](adr/0011-production-topology.md) |
 
 ## 1. System context
 
@@ -482,6 +483,102 @@ The brief targets web, iOS and Android. The MVP ships a responsive, mobile-first
 | Offline | Cache "my registrations" and ticket details on the device | Attendees open tickets at venues with poor signal | Cached data can be stale; show last-synced time |
 | Notifications | Push through Expo (APNs and FCM), fed by the same outbox as email; a `push_tokens` table per user and device (backend delta) | Reminders and cancellations reach people quickly | Tokens to expire and clean up per device |
 | Interim | Mobile-first responsive web in the phone browser | Covers phones now at no extra cost | No app store presence, no push, not installable (no web manifest yet) |
+
+## 12. Production topology
+
+The demo runs as one container on Replit's free tier ([ADR 0003](adr/0003-hosting.md)). This is the topology Gatherly moves to when real users arrive ([ADR 0011](adr/0011-production-topology.md)). The application does not change shape: the same container image, the same API, the same Postgres schema. What changes is everything around it.
+
+```mermaid
+flowchart LR
+  subgraph clients["Clients"]
+    web["Web SPA"]
+    ios["iOS and Android"]
+  end
+
+  subgraph edge["Edge"]
+    cdn["CDN<br/>static assets, public event pages"]
+    waf["WAF and DDoS protection<br/>bot rules, IP reputation"]
+  end
+
+  subgraph region["Primary region"]
+    lb["Load balancer<br/>TLS, health checks"]
+    subgraph compute["Container platform (ECS Fargate or Cloud Run)"]
+      api["API containers<br/>min 2, autoscaled"]
+      worker["Worker containers<br/>outbox, email, webhooks, hold expiry"]
+      migrate["Migration job<br/>runs once per release"]
+    end
+    pg[("Managed Postgres<br/>primary + read replica<br/>PITR backups")]
+    redis[("Redis<br/>rate limits, cache")]
+    queue[["Queue<br/>outbox fan-out"]]
+    obj[("Object storage<br/>images")]
+    secrets["Secrets manager"]
+  end
+
+  obs["OTel collector<br/>then Grafana and Sentry"]
+  stripe["Stripe, email, push"]
+
+  web --> cdn
+  ios --> waf
+  cdn --> waf --> lb --> api
+  api --> pg
+  api --> redis
+  api --> queue --> worker
+  worker --> pg
+  worker --> stripe
+  api --> obj
+  cdn --> obj
+  migrate --> pg
+  api -.-> secrets
+  worker -.-> secrets
+  api -.-> obs
+  worker -.-> obs
+```
+
+**Why no API gateway product.** One API with one team behind it gets nothing from a separate gateway that the load balancer, WAF and in-app middleware (auth, rate limits, validation, problem+json errors) do not already give. A gateway such as Kong or AWS API Gateway earns its place when there are partner API keys and quotas, several backend services behind one URL, or per-client usage billing.
+
+### When each piece arrives
+
+Nothing here is built ahead of need. Each component has a reason it waits and a signal that says it is time.
+
+| Component | Why not in the MVP | Add it when | Signal |
+|---|---|---|---|
+| Container platform with min 2 instances | Free tier, demo traffic | First real users | Cold starts in user-facing latency; any uptime promise |
+| Separate staging and production | One demo environment | First real users | A change needs testing against production-like data |
+| Migration job (not app boot) | One instance, so no race | More than one instance can start at once | Two releases overlapping during deploy |
+| Managed Postgres with PITR | Replit's database is enough for a demo | First real data worth keeping | Any data we cannot reseed |
+| Read replica | Primary handles demo reads | Discovery reads dominate | Database CPU above 60 percent with reads above 80 percent of queries |
+| Redis | Rate limits are per instance, which is acceptable on one | A second API instance | Limits evaded by spreading requests; need for shared cache |
+| CDN for pages and assets | Replit's edge serves hashed assets | Public traffic from many regions | Time to first byte above 300 ms outside the region |
+| WAF and bot rules | In-app rate limits cover the demo | Public launch or first abuse | Credential stuffing, seat squatting, scraping |
+| Queue and workers | No email, payments or holds yet | First feature that sends email or takes payment | Any side effect that must survive a crash |
+| Object storage | Images ship with the app | User-uploaded cover images | Upload feature |
+| OTel collector | Free tier, direct export | Cost or volume limits | Need for tail sampling or PII scrubbing at one point |
+| API gateway | See above | Partner API or several services | First external API consumer with a key |
+| Second region | One region meets demo needs | A contractual availability target or data residency rule | SLA above 99.9 percent, or EU customers needing EU data |
+
+### Caching strategy
+
+Caching follows one rule: **never cache anything that decides a seat or depends on who is asking**. Seat counts must come from the database at the moment of registration.
+
+| Layer | What | TTL | Invalidation |
+|---|---|---|---|
+| Browser and CDN | Hashed JS, CSS, images | One year, immutable | New file name on every build |
+| CDN | Public event list and event pages for anonymous visitors | 30 to 60 seconds, stale-while-revalidate | Short TTL; purge by event tag on edit or cancel |
+| Redis | Discovery candidate pools and popular lists per city and filter set | About 60 seconds | Expire; event edits publish a purge |
+| Redis | Session lookups | Session lifetime | Delete on sign-out or suspension |
+| TanStack Query (client) | Lists and details | Seconds, refetch on focus | Mutations invalidate the affected queries |
+| Never cached | Registration, cancellation, seat counts on the detail page for signed-in users, "For you", admin views | | |
+
+### Delivery pipeline
+
+| Stage | MVP | Production |
+|---|---|---|
+| Infrastructure | Replit config in `.replit` | Terraform, one module per environment, reviewed like code |
+| Build | Docker image built in CI | Same image, signed, pushed to a registry, tagged with the commit |
+| Promotion | Merge to `main`, republish | Same image promoted dev, then staging, then production; no rebuilds between stages |
+| Release | Replace the running deployment | Blue-green or canary (5 percent, then 100 percent) with automatic rollback on error rate or latency SLO breach |
+| Database | Migrations before start | Expand and contract migrations in a separate job, so old and new code both run during a release |
+| Configuration | Environment variables | Secrets manager plus a feature flag table (ranker version, demo mode, kill switches) |
 
 ## Further reading
 

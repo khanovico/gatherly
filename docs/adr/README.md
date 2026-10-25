@@ -14,3 +14,4 @@ Short records of the decisions that shape Gatherly. Each one states the context,
 | [0008](0008-password-signup.md) | Email and password sign-up now, OAuth later | Accepted, partly supersedes 0004 |
 | [0009](0009-rule-based-ranker.md) | Rule-based ranker behind a Ranker interface now, a learned model later | Accepted |
 | [0010](0010-interaction-data.md) | Interaction data collection, privacy, consent and retention | Accepted |
+| [0011](0011-production-topology.md) | Production topology: containers on a managed platform, components added by trigger | Accepted |
