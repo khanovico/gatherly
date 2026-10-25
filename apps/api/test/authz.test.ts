@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { users } from '../src/db/schema';
-import { createEvent, login, signedInMember, startApp } from './setup';
+import { createEvent, eventInput, login, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
 beforeAll(async () => {
@@ -9,20 +9,7 @@ beforeAll(async () => {
 });
 afterAll(() => ctx.close());
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const startsAt = Date.now() + 7 * DAY_MS;
-const newEvent = {
-  title: 'Authz meetup',
-  summary: 'Who may create it',
-  description: '',
-  category: 'tech',
-  format: 'online',
-  onlineUrl: 'https://example.com/meet',
-  startsAt: new Date(startsAt).toISOString(),
-  endsAt: new Date(startsAt + 2 * 60 * 60 * 1000).toISOString(),
-  timezone: 'America/New_York',
-  capacity: 20,
-};
+const newEvent = eventInput();
 
 const call = (method: 'GET' | 'POST' | 'PATCH', url: string, cookie?: string, payload?: object) =>
   ctx.app.inject({ method, url: `/api/v1${url}`, headers: cookie ? { cookie } : {}, payload });

@@ -1,5 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createEvent, login, seatCounts, signedInMember, startApp } from './setup';
+import { events } from '../src/db/schema';
+import { createEvent, eventInput, login, seatCounts, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
 beforeAll(async () => {
@@ -13,23 +15,31 @@ const register = (eventId: string, cookie: string) =>
     url: `/api/v1/events/${eventId}/registrations`,
     headers: { cookie },
   });
+const cancelMine = (eventId: string, cookie: string) =>
+  ctx.app.inject({
+    method: 'DELETE',
+    url: `/api/v1/events/${eventId}/registrations/me`,
+    headers: { cookie },
+  });
 
-it('follows the brief: register, full, cancel frees the seat, re-register', async () => {
+it('follows the brief: create, register, full, cancel frees the seat, re-register', async () => {
   const organizer = await login(ctx.app, 'organizer');
   const attendee = await login(ctx.app, 'attendee');
   const other = await signedInMember(ctx.db);
-  const event = await createEvent(ctx.db, organizer.userId, 1);
+  const created = await ctx.app.inject({
+    method: 'POST',
+    url: '/api/v1/events',
+    headers: { cookie: organizer.cookie },
+    payload: eventInput(1),
+  });
+  expect(created.statusCode).toBe(201);
+  const event = created.json<{ id: string }>();
 
   expect((await register(event.id, attendee.cookie)).statusCode).toBe(201);
   const full = await register(event.id, other.cookie);
   expect([full.statusCode, full.json().code]).toEqual([409, 'EVENT_FULL']);
 
-  const cancel = await ctx.app.inject({
-    method: 'DELETE',
-    url: `/api/v1/events/${event.id}/registrations/me`,
-    headers: { cookie: attendee.cookie },
-  });
-  expect(cancel.json().status).toBe('cancelled');
+  expect((await cancelMine(event.id, attendee.cookie)).json().status).toBe('cancelled');
   expect(await seatCounts(ctx.db, event.id)).toEqual({ registeredCount: 0, confirmed: 0 });
 
   expect((await register(event.id, attendee.cookie)).statusCode).toBe(201);
@@ -59,15 +69,9 @@ it('survives one member registering and cancelling at the same time', async () =
   const organizer = await signedInMember(ctx.db);
   const member = await signedInMember(ctx.db);
   const event = await createEvent(ctx.db, organizer.userId, 10);
-  const cancel = () =>
-    ctx.app.inject({
-      method: 'DELETE',
-      url: `/api/v1/events/${event.id}/registrations/me`,
-      headers: { cookie: member.cookie },
-    });
 
   const responses = await Promise.all(
-    Array.from({ length: 30 }, (_, i) => (i % 2 ? cancel() : register(event.id, member.cookie))),
+    Array.from({ length: 30 }, (_, i) => (i % 2 ? cancelMine : register)(event.id, member.cookie)),
   );
 
   expect(responses.map((r) => r.statusCode).filter((s) => s >= 500)).toEqual([]);
@@ -97,4 +101,71 @@ it('cancelling an event cancels its registrations, once, and only before it star
   expect([again.statusCode, again.json().code]).toEqual([409, 'EVENT_CANCELLED']);
   const late = await cancel(started.id);
   expect([late.statusCode, late.json().code]).toEqual([409, 'EVENT_STARTED']);
+});
+
+type Member = Awaited<ReturnType<typeof signedInMember>>;
+type Response = Awaited<ReturnType<typeof register>>;
+
+it.each<[string, (member: Member, host: Member) => Promise<Response>, number, string]>([
+  [
+    'registering after the start',
+    async (m, host) =>
+      register((await createEvent(ctx.db, host.userId, 10, { startsAt: new Date() })).id, m.cookie),
+    409,
+    'EVENT_STARTED',
+  ],
+  [
+    'cancelling after the start',
+    async (m, host) => {
+      const event = await createEvent(ctx.db, host.userId, 10);
+      await register(event.id, m.cookie);
+      await ctx.db.update(events).set({ startsAt: new Date() }).where(eq(events.id, event.id));
+      return cancelMine(event.id, m.cookie);
+    },
+    409,
+    'EVENT_STARTED',
+  ],
+  [
+    'registering for a cancelled event',
+    async (m, host) =>
+      register((await createEvent(ctx.db, host.userId, 10, { status: 'cancelled' })).id, m.cookie),
+    409,
+    'EVENT_CANCELLED',
+  ],
+  [
+    'double-submitting a registration',
+    async (m, host) => {
+      const event = await createEvent(ctx.db, host.userId, 10);
+      const both = await Promise.all([register(event.id, m.cookie), register(event.id, m.cookie)]);
+      expect(both.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+      return both.find((r) => r.statusCode === 409)!;
+    },
+    409,
+    'ALREADY_REGISTERED',
+  ],
+  [
+    'cancelling without a registration',
+    async (m, host) => cancelMine((await createEvent(ctx.db, host.userId, 10)).id, m.cookie),
+    404,
+    'NOT_REGISTERED',
+  ],
+  [
+    "an organizer removing an attendee of someone else's event",
+    async (m, host) => {
+      const olivia = await login(ctx.app, 'organizer');
+      const event = await createEvent(ctx.db, host.userId, 10);
+      const { id } = (await register(event.id, m.cookie)).json<{ id: string }>();
+      return ctx.app.inject({
+        method: 'POST',
+        url: `/api/v1/registrations/${id}/cancel`,
+        headers: { cookie: olivia.cookie },
+      });
+    },
+    403,
+    'FORBIDDEN',
+  ],
+])('rejects %s', async (_, act, status, code) => {
+  const [member, host] = await Promise.all([signedInMember(ctx.db), signedInMember(ctx.db)]);
+  const res = await act(member, host);
+  expect([res.statusCode, res.json().code]).toEqual([status, code]);
 });

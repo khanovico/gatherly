@@ -46,6 +46,24 @@ export const signedInMember = async (db: Db) => {
   return { userId: user!.id, cookie: `gatherly_session=${token}` };
 };
 
+/** A valid `POST /events` body, a week out. */
+export const eventInput = (capacity = 20) => {
+  const startsAt = Date.now() + 7 * DAY_MS;
+  return {
+    title: 'Test meetup',
+    summary: 'A test event',
+    description: '',
+    category: 'tech',
+    format: 'online',
+    onlineUrl: 'https://example.com/meet',
+    startsAt: new Date(startsAt).toISOString(),
+    endsAt: new Date(startsAt + 2 * 60 * 60 * 1000).toISOString(),
+    timezone: 'America/New_York',
+    capacity,
+  };
+};
+
+/** Inserts an event directly, for tests about what happens after creation. */
 export const createEvent = async (
   db: Db,
   organizerId: string,
