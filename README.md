@@ -130,6 +130,19 @@ The full picture, including the data model, request flow, permission matrix and 
 
 The live deployment sends traces, logs and metrics to Grafana Cloud and errors to Sentry. One trace ID follows a click from the browser through the API to every SQL query, log line and error, so a single ID answers "what happened, to whom, and why".
 
+### See it live
+
+No account needed: these views are public and read-only.
+
+| Where | What you see |
+|---|---|
+| [Grafana dashboard](https://lankyholly1972.grafana.net/public-dashboards/9402737b590a4f538536e6057470aeba) | Request rate, errors and latency by API route, business counters, recent API logs and requests with trace IDs |
+| Sentry: [browser error](https://khandev-s1.sentry.io/share/issue/5d7cc0bd2b5a4701aba7387a0b4b86d1/) and [API error](https://khandev-s1.sentry.io/share/issue/25e21197641d4401a8ebfddb8027efa0/) | Two errors from the same trace, with stack traces |
+| Admin console, **Observability** tab (sign in as Sam) | Live version, database readiness and uptime, plus **Trigger test error**: sends a browser and an API error on one trace and shows the trace ID to look up in the dashboard |
+| `x-trace-id` header on every API response | The ID to find any request in the dashboard or in Sentry |
+
+Why public links rather than accounts, the privacy guardrails and the production path are in [docs/observability.md](docs/observability.md#see-it-live-no-account-needed).
+
 | Signal | Where to look | What it shows |
 |---|---|---|
 | Browser pageload and API calls | Sentry trace view | Page timings, Web Vitals and the API request in one trace (the browser sends `traceparent`) |
