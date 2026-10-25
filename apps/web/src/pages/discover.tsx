@@ -14,8 +14,11 @@ import { IllustratedState } from '@/components/illustrated-state';
 import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ActiveFilters } from '@/features/discover/active-filters';
 import { FilterPanel, type PlaceFilters } from '@/features/discover/filter-panel';
+import { PersonalizeBanner } from '@/features/discover/personalize-banner';
 import { SortSelect } from '@/features/discover/sort-select';
+import { TagFilter } from '@/features/discover/tag-filter';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
 import { DateFilter } from '@/features/events/date-filter';
 import { categoryMeta, dateFilterBounds, type DateFilterValue } from '@/features/events/lib';
@@ -44,6 +47,7 @@ export function Component() {
     lng: num('lng'),
     radius: RadiusKm.safeParse(num('radius')).data,
   };
+  const tags = params.get('tags')?.split(',').filter(Boolean) ?? [];
   const sort = SortOrder.safeParse(params.get('sort')).data;
   const { data: me } = useMe();
   const { data: profile } = useProfile({ enabled: Boolean(me) });
@@ -66,6 +70,7 @@ export function Component() {
   const query = {
     q: q || undefined,
     category,
+    tags: tags.length ? tags : undefined,
     ...dateFilterBounds(dates),
     sort,
     format: place.format,
@@ -81,7 +86,8 @@ export function Component() {
   const items = data?.pages.flatMap((page) => page.items) ?? [];
   const total = data?.pages[0]?.total ?? 0;
   const filtered =
-    Boolean(q || category || dates.when || dates.from) || Object.values(place).some(Boolean);
+    Boolean(q || category || tags.length || dates.when || dates.from) ||
+    Object.values(place).some(Boolean);
 
   /** Sets search params, or clears them when the value is empty. */
   const update = (changes: Record<string, string | undefined>, replace = false) =>
@@ -146,7 +152,7 @@ export function Component() {
             <button
               key={c ?? 'all'}
               aria-pressed={category === c}
-              onClick={() => update({ category: c })}
+              onClick={() => update({ category: c, tags: undefined })}
               className="focus-visible:ring-ring/50 group bg-card not-aria-pressed:hover:bg-muted aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:border-primary inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition outline-none focus-visible:ring-[3px]"
             >
               {meta && (
@@ -160,6 +166,15 @@ export function Component() {
           );
         })}
       </div>
+      {category && (
+        <TagFilter
+          category={category}
+          value={tags}
+          onChange={(next) => update({ tags: next.join(',') })}
+        />
+      )}
+      <ActiveFilters />
+      {me === null && <PersonalizeBanner />}
       {isError && !isFetchNextPageError ? (
         <IllustratedState
           image="/images/empty/error.webp"
