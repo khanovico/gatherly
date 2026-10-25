@@ -1,6 +1,7 @@
 import type { Me, Profile } from '@gatherly/shared';
-import { Loader2 } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +74,11 @@ export function ProfileEditor({ me, profile }: { me: Me; profile: Profile }) {
           <h1 className="text-3xl font-semibold">Profile & preferences</h1>
           <p className="text-muted-foreground truncate">{me.user.email}</p>
         </div>
+        <Button asChild variant="outline" className="ml-auto max-sm:hidden">
+          <Link to={`/u/${me.user.id}`}>
+            <Eye /> View public profile
+          </Link>
+        </Button>
       </div>
 
       <Section title="About you" description="Shown on your public profile.">

@@ -105,7 +105,7 @@ export function Component() {
 
           <section>
             <h2 className="text-xl font-semibold">Your host</h2>
-            <div className="bg-card mt-4 flex items-center gap-4 rounded-2xl border p-5">
+            <div className="bg-card hover:border-primary/40 relative mt-4 flex items-center gap-4 rounded-2xl border p-5 transition-colors">
               <Avatar className="size-14">
                 {event.organizer.avatarUrl && (
                   <AvatarImage src={event.organizer.avatarUrl} alt="" />
@@ -115,7 +115,12 @@ export function Component() {
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-semibold">{event.organizer.name}</p>
+                <Link
+                  to={`/u/${event.organizer.id}`}
+                  className="font-semibold after:absolute after:inset-0 hover:underline"
+                >
+                  {event.organizer.name}
+                </Link>
                 <p className="text-muted-foreground text-sm">Organizer on Gatherly</p>
               </div>
             </div>

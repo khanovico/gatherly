@@ -1,4 +1,4 @@
-import type { Profile, UpdateProfileInput } from '@gatherly/shared';
+import type { Profile, PublicProfile, UpdateProfileInput } from '@gatherly/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
@@ -24,5 +24,13 @@ export function useUpdateProfile() {
           queryClient.invalidateQueries({ queryKey }),
         ),
       ),
+  });
+}
+
+/** Anyone's public profile with their upcoming hosted and attended events. */
+export function usePublicProfile(id: string) {
+  return useQuery({
+    queryKey: queryKeys.users.detail(id),
+    queryFn: () => apiFetch<PublicProfile>(`/users/${id}`),
   });
 }
