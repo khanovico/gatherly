@@ -1,3 +1,4 @@
+import type { Persona } from '@gatherly/shared';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { buildApp } from '../src/app';
@@ -5,6 +6,8 @@ import { createDb, type Db } from '../src/db/client';
 import { ensurePersonas } from '../src/db/personas';
 import { events, registrations, sessions, users } from '../src/db/schema';
 import { runMigrations } from '../src/migrate';
+
+type App = Awaited<ReturnType<typeof buildApp>>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -16,6 +19,16 @@ export const startApp = async () => {
   const app = await buildApp({ db });
   const close = () => app.close().then(() => db.$client.end());
   return { app, db, close };
+};
+
+/** Demo sign-in as a persona; returns its id and the cookie header to send. */
+export const login = async (app: App, persona: Persona) => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/demo-login',
+    payload: { persona },
+  });
+  return { userId: res.json().user.id as string, cookie: res.headers['set-cookie'] as string };
 };
 
 /** A fresh member with a session; returns the cookie header to send. */

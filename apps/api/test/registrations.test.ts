@@ -1,21 +1,11 @@
-import type { Persona } from '@gatherly/shared';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { createEvent, seatCounts, signedInMember, startApp } from './setup';
+import { createEvent, login, seatCounts, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
 beforeAll(async () => {
   ctx = await startApp();
 });
 afterAll(() => ctx.close());
-
-const login = async (persona: Persona) => {
-  const res = await ctx.app.inject({
-    method: 'POST',
-    url: '/api/v1/auth/demo-login',
-    payload: { persona },
-  });
-  return { userId: res.json().user.id as string, cookie: res.headers['set-cookie'] as string };
-};
 
 const register = (eventId: string, cookie: string) =>
   ctx.app.inject({
@@ -25,8 +15,8 @@ const register = (eventId: string, cookie: string) =>
   });
 
 it('follows the brief: register, full, cancel frees the seat, re-register', async () => {
-  const organizer = await login('organizer');
-  const attendee = await login('attendee');
+  const organizer = await login(ctx.app, 'organizer');
+  const attendee = await login(ctx.app, 'attendee');
   const other = await signedInMember(ctx.db);
   const event = await createEvent(ctx.db, organizer.userId, 1);
 
