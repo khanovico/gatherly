@@ -1,4 +1,4 @@
-import { CATEGORIES, type Category } from '@gatherly/shared';
+import { CATEGORIES, SortOrder, type Category } from '@gatherly/shared';
 import { ArrowUp, RotateCw, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -6,10 +6,12 @@ import { IllustratedState } from '@/components/illustrated-state';
 import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SortSelect } from '@/features/discover/sort-select';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
 import { DateFilter } from '@/features/events/date-filter';
 import { categoryMeta, dateFilterBounds, type DateFilterValue } from '@/features/events/lib';
 import { useInfiniteEvents } from '@/features/events/queries';
+import { useMe } from '@/hooks/use-me';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 12;
@@ -23,6 +25,8 @@ export function Component() {
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
   };
+  const sort = SortOrder.safeParse(params.get('sort')).data;
+  const { data: me } = useMe();
   const [text, setText] = useState(q);
   const [syncedQ, setSyncedQ] = useState(q);
   if (q !== syncedQ) {
@@ -38,7 +42,13 @@ export function Component() {
     chips.current?.scrollTo({ left: (active?.offsetLeft ?? 0) - 16, behavior: 'smooth' });
   }, [category]);
 
-  const query = { q: q || undefined, category, ...dateFilterBounds(dates), pageSize: PAGE_SIZE };
+  const query = {
+    q: q || undefined,
+    category,
+    ...dateFilterBounds(dates),
+    sort,
+    pageSize: PAGE_SIZE,
+  };
   const list = useInfiniteEvents(query);
   const { data, isPending, isError, isPlaceholderData, isFetchNextPageError } = list;
   const items = data?.pages.flatMap((page) => page.items) ?? [];
@@ -81,11 +91,19 @@ export function Component() {
             className="h-11 rounded-full pl-9"
           />
         </form>
-        <DateFilter
-          value={dates}
-          onChange={(next) => update({ when: next.when, from: next.from, to: next.to })}
-          className="sm:w-56"
-        />
+        <div className="flex gap-2 sm:gap-3">
+          <DateFilter
+            value={dates}
+            onChange={(next) => update({ when: next.when, from: next.from, to: next.to })}
+            className="min-w-0 flex-1 sm:w-56"
+          />
+          <SortSelect
+            // The API ranks "For you" by default once a member has a profile.
+            value={sort ?? (me && !me.onboardingPending ? 'for_you' : 'soonest')}
+            onChange={(next) => update({ sort: next })}
+            signedIn={Boolean(me)}
+          />
+        </div>
       </div>
       <div
         ref={chips}
