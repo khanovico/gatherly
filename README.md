@@ -29,7 +29,7 @@ cp .env.example .env && docker compose up -d db && pnpm install && pnpm db:migra
 Tests run against the `gatherly_test` database the Compose file creates:
 
 ```bash
-docker compose up -d db && pnpm test
+pnpm install && docker compose up -d db && pnpm test
 ```
 
 `pnpm lint` and `pnpm typecheck` run the same checks as CI.
