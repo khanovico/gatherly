@@ -11,10 +11,14 @@ import { registerApiNotFound, registerErrorHandling } from './lib/errors';
 import adminRoutes from './modules/admin/routes';
 import authRoutes from './modules/auth/routes';
 import billingRoutes from './modules/billing/routes';
+import discoverRoutes from './modules/discover/routes';
 import eventsRoutes from './modules/events/routes';
 import healthRoutes from './modules/health/routes';
+import interactionsRoutes from './modules/interactions/routes';
 import organizerRoutes from './modules/organizer/routes';
+import profileRoutes from './modules/profile/routes';
 import registrationsRoutes from './modules/registrations/routes';
+import savesRoutes from './modules/saves/routes';
 import { registerWeb } from './web';
 
 declare module 'fastify' {
@@ -31,6 +35,10 @@ const modules = [
   organizerRoutes,
   adminRoutes,
   billingRoutes,
+  profileRoutes,
+  savesRoutes,
+  interactionsRoutes,
+  discoverRoutes,
 ];
 
 /** Pass `db` to share a connection (tests); otherwise the app opens and closes its own pool. */
