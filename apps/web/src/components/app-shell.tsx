@@ -1,6 +1,7 @@
 import { Outlet, ScrollRestoration, useNavigation } from 'react-router';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { OnboardingRedirect } from '@/features/profile/onboarding-redirect';
 
 export function AppShell() {
   const navigating = useNavigation().state !== 'idle';
@@ -22,6 +23,7 @@ export function AppShell() {
       </main>
       <SiteFooter />
       <ScrollRestoration />
+      <OnboardingRedirect />
     </div>
   );
 }
