@@ -14,16 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { toSearchParams } from '@/features/admin/lib';
-import { Pager } from '@/features/admin/list-controls';
+import { toSearchParams, useDebounced } from '@/features/admin/lib';
+import { Pager, SearchField } from '@/features/admin/list-controls';
+import { UserActions } from '@/features/admin/user-actions';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 const pageSize = 10;
 
 export function UsersTab() {
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const query = { page, pageSize };
+  const query = { q: useDebounced(search.trim()), page, pageSize };
   const { data, isError } = useQuery({
     queryKey: queryKeys.admin.users(query),
     queryFn: () => apiFetch<Paginated<AdminUser>>(`/admin/users?${toSearchParams(query)}`),
@@ -32,6 +34,14 @@ export function UsersTab() {
 
   return (
     <div className="space-y-4">
+      <SearchField
+        label="Search name or email"
+        value={search}
+        onChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+      />
       <Card className="py-0">
         <Table>
           <TableHeader>
@@ -40,6 +50,9 @@ export function UsersTab() {
               <TableHead>Role</TableHead>
               <TableHead>Plan</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="pr-4 text-right">
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -48,10 +61,18 @@ export function UsersTab() {
             ))}
           </TableBody>
         </Table>
+        {data?.total === 0 && (
+          <div className="flex flex-col items-center gap-2 p-10 text-center">
+            <img src="/images/empty/no-results.webp" alt="" className="size-32" />
+            <p className="font-medium">No members match “{query.q}”</p>
+          </div>
+        )}
         {!data && !isError && <Skeleton className="m-4 h-60" />}
         {isError && <p className="text-muted-foreground p-8 text-center">Couldn't load members.</p>}
       </Card>
-      {data && <Pager page={page} pageSize={pageSize} total={data.total} onPage={setPage} />}
+      {!!data?.total && (
+        <Pager page={page} pageSize={pageSize} total={data.total} onPage={setPage} />
+      )}
     </div>
   );
 }
@@ -103,6 +124,9 @@ function UserRow({ user }: { user: AdminUser }) {
           <span aria-hidden className="size-1.5 rounded-full bg-current" />
           {user.status === 'active' ? 'Active' : 'Suspended'}
         </Badge>
+      </TableCell>
+      <TableCell className="pr-4 text-right">
+        <UserActions user={user} />
       </TableCell>
     </TableRow>
   );
