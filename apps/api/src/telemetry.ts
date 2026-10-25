@@ -10,6 +10,8 @@ import { config } from './config';
 
 // Loaded with `node --import` so instrumentation is in place before the app imports fastify and pg.
 // Without OTEL_EXPORTER_OTLP_ENDPOINT nothing starts and @opentelemetry/api stays a no-op.
+const isApi = (url = '') => url.startsWith('/api/');
+
 let sdk: NodeSDK | undefined;
 if (config.OTEL_EXPORTER_OTLP_ENDPOINT) {
   // pg is the only instrumented package imported from ESM; the rest load through require().
@@ -23,9 +25,14 @@ if (config.OTEL_EXPORTER_OTLP_ENDPOINT) {
       'service.version': config.GIT_SHA,
       'deployment.environment': config.NODE_ENV,
     }),
+    // API requests only: static files would add a route (and a set of metric series) per
+    // fingerprinted asset, on every deploy.
     instrumentations: [
-      new HttpInstrumentation(),
-      new FastifyOtelInstrumentation({ registerOnInitialization: true }),
+      new HttpInstrumentation({ ignoreIncomingRequestHook: (req) => !isApi(req.url) }),
+      new FastifyOtelInstrumentation({
+        registerOnInitialization: true,
+        ignorePaths: ({ url }) => !isApi(url),
+      }),
       new PgInstrumentation(),
       new PinoInstrumentation(),
     ],
