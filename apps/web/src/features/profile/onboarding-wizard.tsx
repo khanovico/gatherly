@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { InterestPicker, MIN_INTERESTS } from '@/features/profile/interest-picker';
+import { LocationFields } from '@/features/profile/location-fields';
 import { useUpdateProfile } from '@/features/profile/queries';
 import { ScheduleFields } from '@/features/profile/schedule-fields';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,12 @@ const steps: Step[] = [
       const left = MIN_INTERESTS - interests.length;
       return left > 0 ? `Pick ${left} more` : undefined;
     },
+  },
+  {
+    label: 'Location',
+    title: 'Where do you hang out?',
+    description: "Set a home base and how far you'll go. Skip it if you mostly join online.",
+    body: (draft, update) => <LocationFields value={draft} onChange={update} />,
   },
   {
     label: 'Schedule',
