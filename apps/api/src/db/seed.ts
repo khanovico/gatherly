@@ -123,7 +123,9 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
       .slice(0, going)
       .map((m) => m.id);
     if (alex) attendeeIds.push(idOf.get(PERSONAS.attendee.name)!);
-    return { event: { ...event, registeredCount: attendeeIds.length }, attendeeIds };
+    // Cancelling an event releases every seat (its sign-ups are kept as cancelled below).
+    const registeredCount = event.status === 'cancelled' ? 0 : attendeeIds.length;
+    return { event: { ...event, registeredCount }, attendeeIds };
   });
 
   const rows = await tx
@@ -135,13 +137,18 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     id: rows[i]!.id,
     status: event.status ?? 'published',
   }));
+  // Cancelled events were called off a day ago.
+  const cancelledAt = new Date(+now - DAY_MS);
   const signups = seeded.flatMap((event, i) => {
-    // Sign-ups spread from publication until now, or until the start for past events.
-    const window = Math.min(+now, +event.startsAt) - +event.createdAt;
+    const cancelled = event.status === 'cancelled';
+    // Sign-ups spread from publication until now, the start (past events) or the cancellation.
+    const end = Math.min(+now, +event.startsAt, cancelled ? +cancelledAt : Infinity);
+    const window = end - +event.createdAt;
     return planned[i]!.attendeeIds.map((userId) => ({
       eventId: event.id,
       userId,
       createdAt: new Date(+event.createdAt + random.next() * window),
+      ...(cancelled && { status: 'cancelled' as const, cancelledAt }),
     }));
   });
   await tx.insert(registrations).values(signups);
