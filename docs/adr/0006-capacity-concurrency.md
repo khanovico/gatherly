@@ -15,7 +15,7 @@ Registration runs in one transaction:
 2. If no row changed, read the event and return the precise reason: not found, `EVENT_FULL`, `EVENT_STARTED` or `EVENT_CANCELLED`.
 3. Insert the registration. A partial unique index on event and user, covering only active statuses, turns a duplicate into `ALREADY_REGISTERED` and the transaction rolls back the increment.
 
-Cancel is the mirror: mark the registration cancelled and decrement the counter in the same transaction. A check constraint keeps `registered_count` at or below capacity as a backstop.
+Cancel is the mirror: mark the registration cancelled and decrement the counter in the same transaction. Both paths lock the event row before the registration row, so a register and a cancel racing on one event wait for each other instead of deadlocking. A check constraint keeps `registered_count` between zero and capacity as a backstop.
 
 An integration test sends 25 parallel registrations to a 10-seat event and asserts exactly 10 confirmations, 15 `EVENT_FULL` responses and a final count of 10.
 

@@ -9,7 +9,7 @@ Built on free tiers: Grafana Cloud for traces, logs and metrics; Sentry for erro
 | Signal | API | Web | Lands in |
 |---|---|---|---|
 | Traces | OpenTelemetry Node SDK with automatic instrumentation of HTTP, Fastify and Postgres | Sentry browser tracing; `traceparent` header sent to the API | Grafana Tempo, Sentry |
-| Logs | Structured JSON (pino) with `trace_id` and `span_id` on every line; email redacted | none | Grafana Loki |
+| Logs | Structured JSON (pino) with `trace_id` and `span_id` on every line; `userId` (the account UUID) on signed-in request lines; email redacted | none | Grafana Loki |
 | Metrics | HTTP rate, errors and duration by route template, plus business counters | Web Vitals (load, interactivity, layout shift) | Grafana Prometheus, Sentry |
 | Errors | Sentry Node, attached to the active trace | Sentry React with router integration and an error boundary screen | Sentry |
 | Health | `/healthz`, `/readyz`, `/version` | none | Probes, humans |
@@ -47,10 +47,10 @@ A five-minute check: sign in as Sam, open the Observability tab, press **Trigger
 
 | Risk | Control |
 |---|---|
-| Personal data in public panels | Request logs carry only method, route template, status, duration and trace ID; Fastify's default request log (raw URL and client IP) is off. The logs panel also uses a LogQL `keep` allowlist, so older lines with extra fields stay hidden. Email is redacted at the logger |
+| Personal data in public panels | Request logs carry only method, route template, status, duration, trace ID and, when signed in, `userId` (the account UUID); Fastify's default request log (raw URL and client IP) is off. The logs panel also uses a LogQL `keep` allowlist, so older lines with extra fields stay hidden. Email is redacted at the logger |
 | Personal data in Sentry | The API SDK collects no user info, cookies or bodies and only a short allowlist of request headers, so the proxy's client IP and Replit profile headers never leave the app. "Prevent Storing of IP Addresses" is on for both projects. Shared issues were created after both changes; older issues are deleted, not shared. Sentry still derives an approximate location (city) from the visitor's connection |
 | Free-form queries by viewers | Public dashboards run only the saved panel queries; there is no query editor or Explore |
-| Abuse of the test error | The diagnostics endpoint is admin-only and limited to one error every 10 seconds for the whole app |
+| Abuse of the test error | The diagnostics endpoint is admin-only and limited to one error every 10 seconds per instance |
 | Metric cardinality | Only API requests are traced and measured, labelled by route template; static files are skipped |
 | Stale or leaked links | Both links can be revoked or rotated from Grafana and Sentry at any time; no secret is embedded in them |
 
@@ -115,11 +115,13 @@ A registration produces one trace: the browser span from Sentry, then the API re
 | Metric | Type | Labels | Question it answers |
 |---|---|---|---|
 | HTTP request duration | Histogram | method, route template, status code | Is the API fast and healthy, per endpoint? (rate, errors and latency come from this one histogram) |
-| `registrations_total` | Counter | `result`: confirmed, event_full, already_registered, event_started, event_cancelled | Are people getting seats? How often do events sell out? |
+| `registrations_total` | Counter | `result`: `confirmed` or the refusing error code in lowercase: `event_full`, `already_registered`, `event_started`, `event_cancelled` (and rarely `not_found` or `internal`) | Are people getting seats? How often do events sell out? |
 | `cancellations_total` | Counter | none | Are attendees dropping out? |
 | `events_created_total` | Counter | none | Are organizers active? |
+| `saves_total` | Counter | none | Is discovery surfacing events people want? |
+| `hides_total` | Counter | none | Is the ranker showing events people reject? |
 
-**Cardinality rule:** labels use route templates (`/events/:id`) and small fixed sets of values, never user IDs, event IDs or raw URLs. One unbounded label can exhaust the free tier's series limit and makes queries slow everywhere.
+**Cardinality rule:** labels use route templates (`/events/:id`) and small fixed sets of values (error codes are a closed enum), never user IDs, event IDs or raw URLs. One unbounded label can exhaust the free tier's series limit and makes queries slow everywhere.
 
 ## Logs
 
@@ -127,14 +129,14 @@ A registration produces one trace: the browser span from Sentry, then the API re
 |---|---|
 | JSON only, one event per line | Queryable in Loki without parsing rules |
 | `trace_id` and `span_id` injected on every line | Jump from a log line to the full trace |
-| One request line with route template, status and duration | Matches the metrics, so logs explain spikes |
+| One request line with route template, status, duration and, when signed in, `userId` | Matches the metrics, so logs explain spikes; support can find one person's requests from their account. The UUID is random and carries no email or name; hashing it per environment is the next step if logs must not be joinable to the database |
 | No client IP addresses, raw URLs or query strings | Search text and IPs are personal data; the route template is enough to debug |
 | Email addresses redacted | Personal data stays out of a third-party log store |
-| `info` for request outcomes, `warn` for expected rejections, `error` for failures | Alerts and searches stay meaningful |
+| One `info` line per request, including expected 4xx rejections; `error` only for 5xx and unhandled failures | Alerts and searches stay meaningful; rejections are counted by status, not logged as problems |
 
 ## Errors
 
-**Only real failures go to Sentry.** A full event (`EVENT_FULL`) or a missing entitlement is the system working correctly, so it is counted in metrics, not reported as an error. Unhandled exceptions and 5xx responses are reported with the trace ID, the route and the user ID (never email). On the web, an error boundary shows a friendly recovery screen and reports the crash.
+**Only real failures go to Sentry.** A full event (`EVENT_FULL`) or a missing entitlement is the system working correctly, so it is counted in metrics, not reported as an error. Unhandled exceptions and 5xx responses are reported with the trace ID, the route and `user.id` (the account UUID; no email, no IP). On the web, an error boundary shows a friendly recovery screen and reports the crash.
 
 ## Resource attributes and sampling
 
@@ -174,7 +176,7 @@ The repository ships one Grafana dashboard definition (`ops/grafana/dashboard.js
 
 | Symptom | First stop | Then |
 |---|---|---|
-| "I could not register" | Loki: logs for the user ID around the time | Trace for that request: which guard or rule rejected it |
+| "I could not register" | Loki: request lines with the person's `userId` around the time | Trace for that request: which guard or rule rejected it |
 | Event looks overbooked | `registrations_total` and the event row | The capacity test and check constraint make this a bug signal, not noise |
 | API feels slow | Latency panel by route | Slowest traces in Tempo: database or application time? |
 | Web page crashed | Sentry web issue | Linked API trace, if the crash followed a request |

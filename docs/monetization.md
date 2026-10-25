@@ -17,7 +17,7 @@ Everything below is a set of **assumptions to validate with business stakeholder
 
 | Assumption | Why we believe it | How to validate | If wrong |
 |---|---|---|---|
-| Organizers will pay a monthly fee to create events | Paid plans reduce spam and signal serious hosts | Pricing-page clicks on "Subscribe" (tracked in the MVP), interviews with 10 organizers | Free creation with limits (events per month) and monetize tickets only |
+| Organizers will pay a monthly fee to create events | Paid plans reduce spam and signal serious hosts | Checkout attempts (a signed-in member's "Upgrade" click calls `POST /billing/checkout`, visible in the per-route request metrics; no dedicated counter yet), interviews with 10 organizers | Free creation with limits (events per month) and monetize tickets only |
 | Free events should stay free for attendees | Community meetups are the core use case | Share of events that are free in the first months | Optional "supporter" tip at registration |
 | Organizers want to choose who pays the ticket fee | Competing platforms offer the choice; norms differ by community | Organizer survey; A/B test the default | Fix one default and remove the setting |
 | USD only is enough at launch | Initial market is one country | Sign-up geography | Multi-currency is additive (section 7) |
@@ -55,6 +55,8 @@ stateDiagram-v2
 ### Lapsed Premium behavior
 
 The rule: **never punish attendees for an organizer's billing problem.**
+
+**Status: the grace period is planned, not built.** Today only an `active` subscription grants entitlements, so a `past_due` organizer loses `events:create` at once (existing events and ownership are unaffected). The grace column below ships with Stripe Billing, when `past_due` first becomes a real state.
 
 | Capability | Active | Past due (grace, e.g. 7 days) | Canceled (lapsed) |
 |---|---|---|---|
@@ -193,7 +195,7 @@ Planned tables: `connected_accounts` (organizer, Stripe account, charges and pay
 
 | Surface | Behavior | Why show it now |
 |---|---|---|
-| Pricing page | Free versus Premium plan cards; "Subscribe" opens a "coming soon" dialog | Makes the business model concrete and measures interest |
+| Pricing page | Free versus Premium plan cards; "Upgrade" opens a "coming soon" dialog (signed-out visitors go to sign-in) | Makes the business model concrete and measures interest |
 | Plan badge and billing settings | Current plan shown in the header and settings | Users understand why some actions are locked |
 | Paywall on "Create event" | Free users see an upgrade prompt; the API also rejects with `ENTITLEMENT_REQUIRED` | Proves the entitlement model end to end; UI is never the only check |
 | Admin plan grant | Admins can set a user's plan (provider `comp`) | Lets reviewers turn an attendee into an organizer without real billing |

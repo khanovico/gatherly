@@ -1,6 +1,6 @@
 # 0004. Demo persona sign-in with server-side sessions
 
-- **Status:** Accepted, amended by [0008](0008-password-signup.md) (real accounts with email and password; personas remain as demo accounts)
+- **Status:** Partly superseded by [0008](0008-password-signup.md). Still in force: server-side sessions, the cookie settings and the protected personas. Replaced: "sign-up coming soon" (real email and password accounts exist) and personas as the only way in (they now exist only when `DEMO_MODE=true`).
 - **Date:** 2026-10-25
 
 ## Context
@@ -9,9 +9,9 @@ Reviewers must be able to try every role (attendee, organizer, admin) in seconds
 
 ## Decision
 
-- The sign-in page offers "Continue as Organizer / Attendee / Admin". The API creates a server-side session row and sets an HttpOnly, Secure, SameSite=Lax cookie.
+- The sign-in page offers "Continue as Organizer / Attendee / Admin". The API creates a server-side session row and sets an HttpOnly, SameSite=Lax cookie, Secure in production.
 - A persona switcher in the header changes identity in one click.
-- "Sign up" is visible but opens a "coming soon" dialog.
+- ~~"Sign up" is visible but opens a "coming soon" dialog.~~ Superseded by [0008](0008-password-signup.md).
 - Sessions live in Postgres, not in signed tokens.
 
 | Choice | Why | Tradeoff |
@@ -25,7 +25,7 @@ Reviewers must be able to try every role (attendee, organizer, admin) in seconds
 
 | Option | Why not now |
 |---|---|
-| Email and password | Weeks of security-sensitive work that the brief does not ask for |
+| Email and password | Weeks of security-sensitive work that the brief does not ask for (later adopted in [0008](0008-password-signup.md), when personalization needed real accounts) |
 | OIDC provider (Auth0, Clerk, Cognito) | The right production answer, but adds account setup and friction for reviewers |
 | JWT in local storage | Not revocable; readable by injected scripts |
 

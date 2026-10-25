@@ -31,7 +31,7 @@ The web app records an impression only when a card is actually on screen and sen
 | Data minimization | No email, name or free-form profile text in interaction rows; IDs only |
 | First party only | No third-party analytics or ad trackers on the site |
 | Location | Opt-in and coarse: a chosen neighborhood, or coordinates the user chose to share once; no background tracking |
-| Private by default | Preferences (neighborhood, radius, time slots) are private; the public profile shows only name, avatar, bio, interests and upcoming events |
+| Private by default | Preferences (neighborhood, radius, time slots) are private, and the attending list is shown only to its owner; the public profile shows name, avatar, bio, interests and events the person hosts |
 | Separation from telemetry | Product data lives in Postgres, not in Grafana logs, so it has its own access and retention rules |
 
 **Retain (proposed, to confirm with legal):**
@@ -41,7 +41,18 @@ The web app records an impression only when a card is actually on screen and sen
 | Raw interactions of signed-in users | 180 days, then rolled up into per-user aggregates (for example category affinity) |
 | Anonymous interactions | 30 days |
 | Aggregates and preferences | While the account exists |
-| On account deletion | Profile, saves, hides and interactions deleted; registrations anonymized so seat counts stay correct |
+
+**Account deletion: today versus planned.**
+
+| | Today | Planned (before real users) |
+|---|---|---|
+| Trigger | No self-service deletion; only a direct database delete | A "delete my account" request, handled by a job |
+| Profile, sessions, subscription, saves, hides, interactions | Deleted by foreign-key cascade | Same |
+| Registrations | Also deleted by cascade, which would leave `registered_count` too high on events with active seats | Active registrations cancelled first (seats freed in the same transaction), then the rows anonymized: the user reference moves to a tombstone so organizer history and counts stay correct |
+| Hosted events | The delete is refused while the user organizes events (no cascade on `organizer_id`) | Upcoming events cancelled with notice to attendees, past events kept under an anonymized organizer |
+| Telemetry | Pseudonymous IDs in logs and Sentry age out with the vendor's retention | Same, with a written retention period |
+
+The cascade is acceptable for a demo with no deletion feature; it is not the production story, which is why deletion is a "before real users" item on the [roadmap](../roadmap.md).
 
 ## Alternatives considered
 

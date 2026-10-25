@@ -4,6 +4,25 @@ Gatherly is a community events platform for three kinds of user: organizers who 
 
 **Guiding tradeoff:** ship a working MVP fast, but make every shortcut deliberate, visible and documented with its upgrade path. Foundations that are expensive to retrofit (data integrity, authorization layers, telemetry, a payment-ready data model, interaction logging for personalization) are built or designed now. Everything else waits.
 
+## Brief at a glance
+
+Every question in the brief, the short answer, and where the long answer lives.
+
+| Brief asks | Short answer | Details |
+|---|---|---|
+| Diagram and brief explanation | One deployable unit: a Fastify API that also serves the React app, backed by Postgres, exporting telemetry | [Containers](#2-containers), [system context](#1-system-context) |
+| How backend, database and clients interact | Web calls `/api/v1` from the same origin with a session cookie; mobile would call the same versioned API with a bearer token; Postgres is the only state | [Containers](#2-containers), [mobile](#11-mobile-approach) |
+| Core entities and relationships | Users, events, registrations, plans and subscriptions; profiles, saves, hides and interactions for discovery | [Data model](#4-data-model) |
+| How user types access the system | Role (member or admin), plan entitlement (`events:create` makes an organizer) and ownership, all enforced by API guards | [Access control](#6-access-control), [permission matrix](#permission-matrix) |
+| Technology choices for an MVP | TypeScript end to end with one shared schema package; Postgres does capacity, search and sessions, so no extra infrastructure | [Decisions](#decisions-at-a-glance), [ADRs](adr/README.md) |
+| MVP versus later | Core workflow, authorization, telemetry and a payment-ready schema now; payments, notifications, native apps and learned ranking later | [MVP versus later](#7-mvp-versus-later), [roadmap](roadmap.md) |
+| Scaling, security, third parties | Each pressure point has a next step and a trigger; the UI is never the security boundary; every vendor sits behind a small interface | Sections [8](#8-scaling-considerations), [9](#9-security-considerations), [10](#10-third-party-integrations) |
+| Create event, register, refuse when full, cancel | REST endpoints; one conditional update in one transaction decides who gets the last seat | [Request flow](#3-request-flow-register-with-capacity), [API](api.md) |
+| Persistence, validation, error handling | Postgres with check constraints and a partial unique index; Zod at the boundary; RFC 9457 problem details with stable codes | [Domain rules](#domain-rules), [error codes](api.md#error-codes) |
+| Describe role-based authorization | Designed and implemented in guards, not only described | [Access control](#6-access-control), [ADR 0005](adr/0005-authorization-model.md) |
+| At least one automated test | Integration tests against Postgres: the brief's workflow through the API, an error-path table, and concurrent registrations for the last seats | `apps/api/test` |
+| Short README: run, decisions, assumptions, before production | [README](../README.md) | [Roadmap](roadmap.md) for the ordered plan |
+
 ## Decisions at a glance
 
 | Decision | Choice | Why | Tradeoff accepted | ADR |
@@ -11,7 +30,7 @@ Gatherly is a community events platform for three kinds of user: organizers who 
 | Language and stack | TypeScript end to end: Fastify, Zod, Drizzle, Postgres, React | One language and one set of schemas for API, web and later mobile | Node is not the fastest runtime for CPU-heavy work (we have none) | [0001](adr/0001-stack.md) |
 | Repository | pnpm workspace monorepo: `apps/api`, `apps/web`, `packages/shared` | API and clients change together; contracts cannot drift | One CI pipeline builds everything | [0002](adr/0002-monorepo.md) |
 | Hosting | One Replit Autoscale deployment (free tier); API serves the built SPA | Zero cost, live link, same origin (no CORS) | Cold starts, one environment, link renewal every 30 days | [0003](adr/0003-hosting.md) |
-| Authentication | Email and password sign-up (argon2id) plus one-click demo personas; server-side sessions, HttpOnly cookie | Real accounts that remember preferences, with no third party or paid developer program | We own password storage; no email verification or reset yet; OAuth later | [0004](adr/0004-demo-auth.md), [0008](adr/0008-password-signup.md) |
+| Authentication | Email and password sign-up (argon2id); server-side sessions, HttpOnly cookie; one-click demo personas only when `DEMO_MODE` is on | Real accounts that remember preferences, with no third party or paid developer program | We own password storage; no email verification or reset yet; OAuth later | [0008](adr/0008-password-signup.md) (sessions from [0004](adr/0004-demo-auth.md)) |
 | Authorization | Three layers: role, entitlement, ownership, enforced in API guards | Separates who you are, what you paid for, and what you own | Three checks to reason about instead of one role | [0005](adr/0005-authorization-model.md) |
 | Capacity | Atomic conditional update plus partial unique index, one transaction | No overbooking under concurrency, no extra infrastructure | One hot row per event limits peak throughput on mega-events | [0006](adr/0006-capacity-concurrency.md) |
 | Telemetry | OpenTelemetry direct to Grafana Cloud; errors to Sentry | Mature signals on free tiers, no collector to host | No tail sampling; exporter runs in the app process | [0007](adr/0007-telemetry.md) |
@@ -143,7 +162,7 @@ sequenceDiagram
   Note over B: Responds 409 EVENT_FULL
 ```
 
-**Cancel** runs the mirror image in one transaction: set the registration to `cancelled` (soft delete, keeps history) and decrement the counter. Re-registering after a cancel creates a new row, which the partial unique index allows because it only covers active statuses.
+**Cancel** runs the mirror image in one transaction: set the registration to `cancelled` (soft delete, keeps history) and decrement the counter. Register and cancel lock the event row before the registration row, always in that order, so a register and a cancel racing on the same event cannot deadlock. Re-registering after a cancel creates a new row, which the partial unique index allows because it only covers active statuses.
 
 ## 4. Data model
 
@@ -172,19 +191,21 @@ erDiagram
     text password_hash "argon2id, null for demo personas"
     enum role "member or admin"
     enum status "active or suspended"
+    bool is_protected "seeded personas"
     timestamptz created_at
   }
   sessions {
-    text id PK
+    text id PK "SHA-256 of the cookie token"
     uuid user_id FK
     timestamptz expires_at
+    timestamptz created_at
   }
   plans {
     uuid id PK
-    text code UK "free or premium"
+    enum code UK "free or premium"
     text name
     int price_cents
-    text interval
+    enum interval "month or year"
     text_array entitlements "events:create, tickets:sell"
   }
   subscriptions {
@@ -193,21 +214,21 @@ erDiagram
     uuid plan_id FK
     enum status "active, canceled, past_due"
     timestamptz current_period_end
-    text provider "mock, comp, stripe later"
+    enum provider "mock or comp; stripe later"
     text provider_ref
   }
   events {
     uuid id PK
     uuid organizer_id FK
     text title
-    text category
+    enum category
     enum format "in_person or online"
     timestamptz starts_at "UTC"
-    timestamptz ends_at "UTC"
+    timestamptz ends_at "UTC, CHECK after starts_at"
     text timezone "IANA, for display"
-    int capacity "1 to 10000"
-    int registered_count "never above capacity"
-    int price_cents "0 in MVP"
+    int capacity "1 to 10000, CHECK above 0"
+    int registered_count "CHECK 0 to capacity"
+    int price_cents "0 in MVP, CHECK not negative"
     text currency
     enum status "published or cancelled"
     float lat "null for online events"
@@ -227,7 +248,7 @@ erDiagram
   }
   user_profiles {
     uuid user_id PK, FK
-    text_array interests "at least 3 categories"
+    enum_array interests "API asks for 3 when set"
     text_array tags
     text neighborhood
     float home_lat "opt-in"
@@ -248,9 +269,9 @@ erDiagram
     timestamptz created_at
   }
   interactions {
-    uuid id PK
+    bigint id PK "identity"
     uuid user_id FK "null when anonymous"
-    text anonymous_id "random first-party id"
+    uuid anonymous_id "random first-party id"
     uuid event_id FK
     enum type "impression, click, view, save, unsave, hide, register, cancel"
     text surface
@@ -283,14 +304,15 @@ Indexes: events by `(starts_at, status)` for discovery, events by `organizer_id`
 
 | Rule | Behavior | Error |
 |---|---|---|
-| Event time | Starts in the future; ends after it starts | `VALIDATION_FAILED` |
-| Capacity | Whole number from 1 to 10,000; cannot drop below confirmed registrations | `CAPACITY_BELOW_REGISTERED` |
+| Event time | Starts in the future and within two years; ends after it starts and at most seven days later. The database also checks that the end follows the start | `VALIDATION_FAILED` |
+| Capacity | Whole number from 1 to 10,000 (the database checks it is above zero); cannot drop below confirmed registrations | `CAPACITY_BELOW_REGISTERED` |
+| Editing | No edits once the event has started or been cancelled | `EVENT_STARTED`, `EVENT_CANCELLED` |
 | Full event | Registration rejected; no waitlist yet (roadmap) | `EVENT_FULL` |
 | Duplicate registration | Rejected while an active registration exists | `ALREADY_REGISTERED` |
 | After start | No register or cancel once the event has started | `EVENT_STARTED` |
-| Cancelled event | Stays visible with its registrations, marked cancelled; no new registrations | `EVENT_CANCELLED` |
+| Cancelling an event | Owner or admin, before it starts; its active registrations are cancelled in the same transaction and stay as history; the event stays visible, marked cancelled | `EVENT_STARTED`, then `EVENT_CANCELLED` for any later register or edit |
 | Organizer registering for own event | Allowed | none |
-| Paid tickets | Price fields exist; any price above zero is rejected in the MVP | `PAID_TICKETS_UNAVAILABLE` |
+| Paid tickets | Price fields exist (the database refuses negative prices); any price above zero is rejected in the MVP | `PAID_TICKETS_UNAVAILABLE` |
 
 ## 5. Personalized discovery
 
@@ -301,7 +323,7 @@ flowchart TB
   subgraph rank["Step 1: rank (per request)"]
     direction LR
     req["GET /events?sort=for_you<br/>or /discover/home"] --> ctx["Viewer context<br/>profile, saves, hides,<br/>registrations"]
-    ctx --> cand["Candidates<br/>upcoming, published, nearby<br/>or online, matching filters"]
+    ctx --> cand["Candidates (bounded pool)<br/>up to 500 soonest upcoming,<br/>published, matching filters"]
     cand --> filt["Hard filters<br/>drop past, full, cancelled,<br/>registered, own, hidden"]
     filt --> score["Score (rules-v1)<br/>interests, tags, distance,<br/>time fit, popularity, recency"]
   end
@@ -325,8 +347,9 @@ flowchart TB
 | Location | Fixed list of New York neighborhoods with coordinates, or a location the user chooses to share; online events have none | No geocoding service, no background tracking |
 | Search | Postgres full-text search with weights, trigram matching for typos, filters for category, tags, format, distance, dates and free events | Good relevance without a search cluster |
 | Sort options | For you (default when signed in and onboarded), soonest, nearest, popular | Personalization never hides the plain orders people expect |
+| Candidate pool | Soonest, nearest and popular are sorted and paged in SQL over every match, with an exact total. For you and the home rails score a bounded pool of the 500 soonest matches in memory, so an event further out than that pool never ranks; the list then reports `totalCapped` and Discover points to the other sorts | Simple, explainable scoring at one-city scale; candidate retrieval moves into the database (PostGIS, search engine, embeddings) before the catalog outgrows the pool |
 | Home rails | "For you", "Near you this weekend", "Popular now"; anonymous visitors get popular and, if shared, nearby | One request fills the landing and Discover pages |
-| Save and not interested | Heart and hide on every card; hidden events never come back; saved events on the profile | Explicit feedback is the strongest signal we can get |
+| Save and not interested | Heart and hide on every card; hidden events never come back; saved events on their own page (`/me/saved`) | Explicit feedback is the strongest signal we can get |
 | Real numbers | Seat counts, attendee lists and popularity come from real rows, including the seeded community | What the ranker sees is what users see |
 | Logging | Every ranked response has a ranker version and request ID; impressions and outcomes are logged against them | Rankers can be compared offline and swapped safely; see [ADR 0010](adr/0010-interaction-data.md) |
 
@@ -377,9 +400,11 @@ Demo personas: **Alex** is an attendee (member, Free plan), **Olivia** an organi
 | View plans and own subscription | Plans only | Yes | Yes | Yes | Yes |
 | Start checkout | 401 | 501 `COMING_SOON` | 501 `COMING_SOON` | 501 `COMING_SOON` | 501 `COMING_SOON` |
 | Manage users (suspend, role, plan), platform stats | 401 | 403 | 403 | 403 | Yes |
-| Reset demo data | 401 | 403 | 403 | 403 | Yes |
+| Reset demo data (demo mode only) | 401 | 403 | 403 | 403 | Yes |
 
-A suspended user is blocked from everything except signing out (403 `ACCOUNT_SUSPENDED`). Because the demo has no passwords and anyone can act as Admin, the seeded personas are protected: they cannot be suspended, demoted or downgraded (409 `PROTECTED_DEMO_ACCOUNT`), the last admin cannot be demoted, and an admin-only **Reset demo data** action restores the seed.
+A suspended user gets 403 `ACCOUNT_SUSPENDED` on every route that needs a session; public routes (browsing, logout, interaction logging) still answer, as they would for a visitor. The last active admin cannot be demoted or suspended (403 `FORBIDDEN`).
+
+**Demo mode.** With `DEMO_MODE=true` (the hosted demo and local Compose), anyone can sign in as a persona without a password, including the admin persona. Guardrails follow from that: the personas cannot be suspended, demoted or downgraded (409 `PROTECTED_DEMO_ACCOUNT`); admins cannot change real accounts (people who signed up on the demo), and real emails are masked (`j***@example.com`) and unsearchable in the admin user list and attendee lists; sign-up refuses the reserved `@gatherly.demo` domain; **Reset demo data** deletes every event hosted by a demo account (personas included) and every non-persona `@gatherly.demo` member, resets the personas, recounts seats on events real accounts host, and reseeds. Real accounts and their sessions stay; their registrations, saves and hides on demo events go with those events. With `DEMO_MODE` off (the default), demo sign-in and demo reset return 404, the persona list is empty, and the server never seeds or deletes data on start.
 
 ## 7. MVP versus later
 
@@ -404,7 +429,8 @@ The MVP is sized for a demo, but nothing in it blocks growth. Each pressure poin
 |---|---|---|---|
 | API throughput | Stateless instances, autoscaled | Container platform with minimum warm instances | Cold starts hurt real users |
 | Database connections from many instances | Small per-instance pool | Connection pooler (PgBouncer or Neon pooler) | Connection errors during scale-out |
-| Discovery reads | Indexed, paginated queries | HTTP caching of public lists at a CDN, then read replicas | Read latency or database CPU climbs |
+| Discovery reads | Indexed SQL filters, paginated; For you scores a bounded pool of 500 candidates in memory | HTTP caching of public lists at a CDN, then read replicas | Read latency or database CPU climbs |
+| Rate limiting | Fixed windows counted in each instance's memory | Shared store (Redis, or Postgres at low volume) so a limit holds across instances | A second instance, or limits evaded by spreading requests |
 | Hot event (thousands try to register at once) | Row lock held for one short transaction | Virtual waiting room or queue in front of registration; split seat inventory | Lock wait time on one event row |
 | Background work | None | Job queue for email, reminders, hold expiry and webhooks, with a transactional outbox | First feature that sends email or takes payment |
 | Search and ranking | Postgres full-text and trigram indexes; ranking over a bounded candidate set in the API | Search engine; PostGIS for geo candidates; precomputed features | Search latency, catalog beyond one city |
@@ -416,14 +442,15 @@ The MVP is sized for a demo, but nothing in it blocks growth. Each pressure poin
 
 | Concern | MVP | Before production |
 |---|---|---|
-| Authentication | Server-side sessions (revocable), HttpOnly, Secure, SameSite=Lax cookie; argon2id password hashes; rate-limited sign-in with one generic error | OAuth or hosted identity, email verification, breached-password screening, MFA for admins, session rotation on privilege change |
+| Authentication | Server-side sessions (revocable, stored as token hashes), HttpOnly, SameSite=Lax cookie, Secure in production; argon2id password hashes; one generic sign-in error; demo sign-in only in demo mode | OAuth or hosted identity, email verification, breached-password screening, MFA for admins, session rotation on privilege change |
 | Authorization | Every rule enforced in API guards; UI only mirrors | Audit log of admin actions; organization-scoped roles |
-| Input validation | Zod schemas at the API boundary; Drizzle parameterized SQL | Same, plus payload size limits per route |
+| Input validation | Zod schemas at the API boundary; Drizzle parameterized SQL; database check constraints; body size limit (413 `PAYLOAD_TOO_LARGE`) and JSON only (415 `UNSUPPORTED_MEDIA_TYPE`) | Per-route size limits where uploads arrive |
 | Cross-site requests | Same-origin SPA, SameSite=Lax cookie, JSON-only API | CSRF token if any cross-site form or embed appears |
 | Secrets | Replit Secrets and local `.env` (never committed); config validated at startup | Secret manager with rotation |
-| Personal data | Email redacted from logs; preferences private; interactions hold IDs only; location opt-in and coarse | Notice and choice for personalization, data export and deletion, enforced retention ([ADR 0010](adr/0010-interaction-data.md)) |
-| Abuse | Protected demo personas, demo reset | Rate limits on sign-in and registration, bot protection on high-demand events |
-| Supply chain | Lockfile, CI on every pull request | Dependency and secret scanning, security headers |
+| Personal data | Email redacted from logs; logs and Sentry carry the account UUID (a random identifier), never email or name; preferences private; attendance visible only to the member themself; interactions hold IDs only; location opt-in and coarse | Notice and choice for personalization, data export and deletion, enforced retention ([ADR 0010](adr/0010-interaction-data.md)) |
+| Abuse | Rate limits per IP on sign-in, sign-up, demo sign-in and interaction logging, plus per target email on sign-in and per visitor on interactions, counted per instance; client IP read through a fixed number of trusted proxy hops (`TRUST_PROXY_HOPS`) so it cannot be spoofed with `X-Forwarded-For`; protected personas and demo-mode guardrails | Shared limit store; per-account registration caps and bot protection on high-demand events |
+| Browser hardening | Security headers (helmet): HSTS, nosniff, frame denial, no referrer, and a Content Security Policy allowing only our own scripts, Sentry and, on `/api/docs`, the reference viewer | CSP violation reports collected in Sentry |
+| Supply chain | Lockfile, CI on every pull request | Dependency and secret scanning |
 
 ## 10. Third-party integrations
 
@@ -444,16 +471,17 @@ Inbound webhooks (Stripe, email events) follow one pattern: verify the signature
 
 ## 11. Mobile approach
 
-The brief targets web, iOS and Android. The MVP ships a responsive, mobile-first web app; the architecture is ready for native apps without backend changes.
+The brief targets web, iOS and Android. The MVP ships a responsive, mobile-first web app. The domain API serves native apps as is; the backend deltas are known and small: bearer tokens issued after OIDC with PKCE, a push-token table, a minimum-client-version check, and a deprecation policy (`Deprecation` and `Sunset` headers, then `/api/v2`) for the installed apps that update slowly.
 
 | Decision | Choice | Why | Tradeoff |
 |---|---|---|---|
 | Framework | React Native with Expo | Reuses TypeScript, `packages/shared` schemas and TanStack Query patterns; one team ships both platforms | Platform-specific features (wallet passes, widgets) need native modules |
 | API | The same versioned REST API (`/api/v1`), with typed clients generated from its OpenAPI document | One backend for all clients; versioning protects installed apps that update slowly | Breaking changes need a new version and a deprecation window |
-| Authentication | OIDC with PKCE in the system browser; the API accepts a bearer token alongside the web cookie | Cookies are awkward in native apps; PKCE is the standard for public clients | Two credential types to validate (same session table behind both) |
+| Authentication | OIDC with PKCE in the system browser; the API accepts a bearer token alongside the web cookie (backend delta) | Cookies are awkward in native apps; PKCE is the standard for public clients | Two credential types to validate (same session table behind both) |
+| Versioning | `/api/v1` stays additive; a minimum-client-version header lets the API ask an outdated app to update; breaking changes announce `Deprecation` and `Sunset` dates before `/api/v2` (backend delta) | Installed apps cannot be redeployed like a web page | Old versions to support until the sunset date |
 | Offline | Cache "my registrations" and ticket details on the device | Attendees open tickets at venues with poor signal | Cached data can be stale; show last-synced time |
-| Notifications | Push through Expo (APNs and FCM), fed by the same outbox as email | Reminders and cancellations reach people quickly | Push tokens to manage per device |
-| Interim | Mobile-first responsive web, installable as a PWA | Covers phones now at no extra cost | No app store presence |
+| Notifications | Push through Expo (APNs and FCM), fed by the same outbox as email; a `push_tokens` table per user and device (backend delta) | Reminders and cancellations reach people quickly | Tokens to expire and clean up per device |
+| Interim | Mobile-first responsive web in the phone browser | Covers phones now at no extra cost | No app store presence, no push, not installable (no web manifest yet) |
 
 ## Further reading
 

@@ -47,6 +47,6 @@ Logged data is biased toward what the old ranker showed (position bias), so offl
 
 - Rankings are deterministic, explainable and unit-testable; reasons come straight from the strongest scoring features.
 - Weights are hand-tuned and subjective until data exists.
-- Scoring runs in the API over a bounded candidate set (upcoming events in the city), which is fine at city scale; candidate generation must move to an index (geo, nearest-neighbor) as the catalog grows.
+- Scoring runs in the API over a bounded candidate pool (the 500 soonest upcoming matches), which is fine at city scale but means an event beyond the pool never ranks; candidate generation must move to an index (geo, nearest-neighbor) before the catalog outgrows the pool.
 
 **Revisit when** enough real impressions and registrations exist to train on: fit a learning-to-rank model on the same features, prove it offline against `rules-v1`, then run it online behind the same interface. Roadmap stages are in [roadmap](../roadmap.md).

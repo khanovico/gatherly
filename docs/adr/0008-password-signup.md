@@ -1,6 +1,6 @@
 # 0008. Email and password sign-up now, OAuth later
 
-- **Status:** Accepted (amends [0004](0004-demo-auth.md): demo personas stay as "Try a demo account")
+- **Status:** Accepted (partly supersedes [0004](0004-demo-auth.md): real accounts replace "sign-up coming soon"; demo personas stay as "Try a demo account", only in demo mode)
 - **Date:** 2026-10-25
 
 ## Context
@@ -15,7 +15,7 @@ Personalization needs real accounts: a person signs up, states what they like, a
 | Password hashing | argon2id | Memory-hard, the current OWASP recommendation; slows offline cracking if the table leaks |
 | Password rule | At least 8 characters, no composition rules | Length beats complexity rules (NIST guidance); fewer frustrated users |
 | Sign-in errors | One generic `INVALID_CREDENTIALS` for wrong email or wrong password | Does not reveal which emails have accounts |
-| Brute force | Sign-in attempts rate-limited; excess returns 429 `RATE_LIMITED` | Caps password guessing per client and per account |
+| Brute force | Sign-in limited per client IP and per email, sign-up per IP; excess returns 429 `RATE_LIMITED` | Caps password guessing per client and per account |
 | Session | The same server-side session and HttpOnly cookie as the demo personas | Guards, routes and the web app do not change |
 | OAuth buttons | Google, Apple and Facebook shown, open "coming soon" | Signals the intended path without building it |
 | Demo personas | Kept under "Try a demo account" | Reviewers still switch roles in one click |
@@ -35,6 +35,6 @@ Personalization needs real accounts: a person signs up, states what they like, a
 - Sign-up returns 409 `EMAIL_TAKEN`, which does reveal that an address has an account. Accepted for usability now; once email verification exists, sign-up answers the same way for every address and emails the owner instead.
 - No email verification and no password reset yet ("Forgot password?" shows "coming soon"). Unverified emails and no recovery are acceptable for a demo and a blocker for production.
 - Password hashing is deliberately slow and CPU-bound; it runs off the main event loop.
-- If the rate limiter counts in process memory, each autoscaled instance counts separately; a shared store makes the limit global.
+- The rate limiter counts in process memory, so each instance counts separately and N instances allow up to N times the limit; a shared store (Redis, or Postgres at low volume) makes the limit global. Acceptable on one small demo instance, a blocker before scaling out.
 
 **Revisit when** real users arrive: add OAuth or a hosted identity provider (users keep one account; `password_hash` is nullable so provider-only users have none; accounts link by verified email), email verification, password reset, breached-password screening and MFA for admins.
