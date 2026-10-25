@@ -13,6 +13,7 @@ export const queryKeys = {
   my: {
     registrations: ['my', 'registrations'] as const,
     events: ['my', 'events'] as const,
+    profile: ['my', 'profile'] as const,
   },
   admin: {
     all: ['admin'] as const,
