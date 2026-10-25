@@ -1,14 +1,17 @@
-import type { CreateEventInput } from '@gatherly/shared';
+import { CATEGORIES, type CreateEventInput } from '@gatherly/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { Globe, LoaderCircle, MapPin } from 'lucide-react';
 import { FormProvider, useForm, useWatch, type FieldPath } from 'react-hook-form';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FieldLegend, FieldSet } from '@/components/ui/field';
+import { Field, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
+import { categoryMeta } from '@/features/events/lib';
 import {
   eventFormSchema,
   friendlyErrors,
@@ -17,6 +20,9 @@ import {
 import { FormField, Section } from '@/features/organizer/form-field';
 import { ApiError, errorMessage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+import { cn } from '@/lib/utils';
+
+const timeZones = Intl.supportedValuesOf('timeZone');
 
 const option =
   'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted/60 has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-3 has-focus-visible:ring-ring/50';
@@ -33,8 +39,12 @@ export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormPro
     defaultValues,
     resolver: zodResolver(eventFormSchema, { error: friendlyErrors }),
   });
-  const { register, control, setError, formState } = form;
-  const format = useWatch({ control, name: 'format' });
+  const { register, control, setValue, setError, formState } = form;
+  const [format, category, coverImage] = useWatch({
+    control,
+    name: ['format', 'category', 'coverImage'],
+  });
+  const covers = [1, 2].map((n) => `/images/covers/${category}-${n}.webp`);
   const queryClient = useQueryClient();
 
   const submit = form.handleSubmit(async (input) => {
@@ -70,6 +80,49 @@ export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormPro
           <FormField name="description" label="Description">
             <Textarea rows={5} {...register('description')} />
           </FormField>
+          <FieldSet>
+            <FieldLegend variant="label">Category</FieldLegend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CATEGORIES.map((value) => {
+                const { label, icon: Icon, color } = categoryMeta[value];
+                return (
+                  <label key={value} className={option}>
+                    <input
+                      type="radio"
+                      value={value}
+                      className="sr-only"
+                      {...register('category', { onChange: () => setValue('coverImage', '') })}
+                    />
+                    <Icon aria-hidden className={cn('size-4', color)} /> {label}
+                  </label>
+                );
+              })}
+            </div>
+          </FieldSet>
+          <FieldSet>
+            <FieldLegend variant="label">Cover image</FieldLegend>
+            <div className="grid grid-cols-2 gap-3">
+              {covers.map((src, index) => (
+                <label
+                  key={src}
+                  className="has-checked:ring-primary has-focus-visible:ring-ring/50 relative cursor-pointer overflow-hidden rounded-lg ring-2 ring-transparent transition has-checked:ring-offset-2 has-focus-visible:ring-3"
+                >
+                  <input
+                    type="radio"
+                    name="coverImage"
+                    className="sr-only"
+                    checked={(coverImage || covers[0]) === src}
+                    onChange={() => setValue('coverImage', src, { shouldDirty: true })}
+                  />
+                  <img
+                    src={src}
+                    alt={`Cover option ${index + 1}`}
+                    className="aspect-video w-full object-cover"
+                  />
+                </label>
+              ))}
+            </div>
+          </FieldSet>
         </Section>
 
         <Section title="Where">
@@ -118,6 +171,15 @@ export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormPro
               <Input type="datetime-local" {...register('endsAt')} />
             </FormField>
           </div>
+          <FormField name="timezone" label="Timezone" hint="Attendees see times in this timezone.">
+            <NativeSelect className="w-full" {...register('timezone')}>
+              {timeZones.map((zone) => (
+                <NativeSelectOption key={zone} value={zone}>
+                  {zone.replaceAll('_', ' ')}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </FormField>
         </Section>
 
         <Section title="Tickets">
@@ -130,6 +192,12 @@ export function EventForm({ defaultValues, submitLabel, onSubmit }: EventFormPro
               {...register('capacity', { valueAsNumber: true })}
             />
           </FormField>
+          <Field data-disabled>
+            <FieldLabel htmlFor="event-price" className="items-center">
+              Price <Badge variant="secondary">Paid tickets — coming soon</Badge>
+            </FieldLabel>
+            <Input id="event-price" value="Free" disabled className="sm:w-40" />
+          </Field>
         </Section>
 
         <div className="flex justify-end gap-3">
