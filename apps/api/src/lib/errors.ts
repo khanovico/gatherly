@@ -49,6 +49,9 @@ const toProblem = (error: unknown): Problem => {
     const errors = error.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
     return problem(400, 'VALIDATION_FAILED', 'Invalid input', errors);
   }
+  // Postgres rejects NUL characters in text (22021). Bad input, not a server fault.
+  if ((error as { cause?: { code?: string } }).cause?.code === '22021')
+    return problem(400, 'VALIDATION_FAILED', 'Text must not contain NUL characters');
   const status = (error as { statusCode?: number }).statusCode;
   if (status && status < 500) {
     const message = error instanceof Error ? error.message : undefined;
