@@ -1,5 +1,6 @@
 import {
   CATEGORIES,
+  CATEGORY_TAGS,
   NEIGHBORHOODS,
   TIME_SLOTS,
   type Borough,
@@ -36,18 +37,6 @@ const FIRST_NAMES = ['Aaliyah', 'Adrian', 'Amara', 'Ana', 'Ben', 'Camila', 'Cale
 const LAST_NAMES = ['Abbott', 'Adeyemi', 'Bauer', 'Brennan', 'Castillo', 'Chowdhury', 'Cruz', 'Delgado', 'Dubois', 'Ellis', 'Fischer', 'Flores', 'Goldberg', 'Hayes', 'Hughes', 'Ibrahim', 'Ito', 'Jensen', 'Kapoor', 'Kowalski', 'Lam', 'Lindqvist', 'Mendoza', 'Murphy', 'Nguyen', 'Novak', 'Obi', 'Ortiz', 'Park', 'Petrov', 'Quinn', 'Reyes', 'Romano', 'Sato', 'Shapiro', 'Silva', 'Sullivan', 'Tanaka', 'Torres', 'Vasquez', 'Walsh', 'Wong', 'Yilmaz', 'Zhang'];
 // prettier-ignore
 const JOBS = ['Product designer', 'Software engineer', 'ER nurse', 'High school teacher', 'Data analyst', 'Line cook', 'Architect', 'Grad student', 'Freelance photographer', 'Marketing lead', 'Physical therapist', 'Startup founder', 'Paralegal', 'UX researcher', 'Accountant', 'Session musician', 'Urban planner', 'Copywriter'];
-
-/** Tag vocabulary per category: member interests and event tags both draw from it. */
-export const CATEGORY_TAGS: Record<Category, string[]> = {
-  tech: ['machine-learning', 'web-development', 'open-source', 'data', 'cloud'],
-  design: ['ux-research', 'typography', 'design-systems', 'illustration', 'product-design'],
-  business: ['startups', 'fundraising', 'marketing', 'careers', 'pricing'],
-  wellness: ['yoga', 'running', 'meditation', 'strength-training', 'mental-health'],
-  arts: ['photography', 'drawing', 'live-music', 'film', 'writing'],
-  outdoors: ['hiking', 'cycling', 'kayaking', 'parks', 'birding'],
-  food: ['cooking', 'wine', 'coffee', 'ramen', 'baking'],
-  community: ['volunteering', 'language-exchange', 'board-games', 'book-club', 'gardening'],
-};
 
 const BOROUGH_WEIGHT: Record<Borough, number> = {
   Brooklyn: 4,

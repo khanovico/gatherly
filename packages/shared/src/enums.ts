@@ -13,6 +13,18 @@ export const CATEGORIES = [
 export const Category = z.enum(CATEGORIES);
 export type Category = z.infer<typeof Category>;
 
+/** Tag vocabulary per category: event tags, member tags and onboarding suggestions draw from it. */
+export const CATEGORY_TAGS: Record<Category, string[]> = {
+  tech: ['machine-learning', 'web-development', 'open-source', 'data', 'cloud'],
+  design: ['ux-research', 'typography', 'design-systems', 'illustration', 'product-design'],
+  business: ['startups', 'fundraising', 'marketing', 'careers', 'pricing'],
+  wellness: ['yoga', 'running', 'meditation', 'strength-training', 'mental-health'],
+  arts: ['photography', 'drawing', 'live-music', 'film', 'writing'],
+  outdoors: ['hiking', 'cycling', 'kayaking', 'parks', 'birding'],
+  food: ['cooking', 'wine', 'coffee', 'ramen', 'baking'],
+  community: ['volunteering', 'language-exchange', 'board-games', 'book-club', 'gardening'],
+};
+
 export const EventFormat = z.enum(['in_person', 'online']);
 export type EventFormat = z.infer<typeof EventFormat>;
 
