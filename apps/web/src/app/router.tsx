@@ -1,12 +1,12 @@
-import { createBrowserRouter } from 'react-router';
 import { AppShell, ShellFallback } from '@/components/app-shell';
+import { createTracedBrowserRouter } from '@/lib/sentry';
 import { ErrorBoundary } from '@/pages/error';
 
 /**
  * Every route, declared once. Each page is its own lazily loaded file in `src/pages/`
  * exporting `Component`, so feature work replaces a page file and never edits this table.
  */
-export const router = createBrowserRouter([
+export const router = createTracedBrowserRouter([
   {
     Component: AppShell,
     HydrateFallback: ShellFallback,
