@@ -12,7 +12,7 @@
     "to": "now"
   },
   "refresh": "1m",
-  "description": "RED by API route, business counters, recent logs and traces for gatherly-api (OTLP to Grafana Cloud). Datasource uids are the Grafana Cloud defaults, so the dashboard can be shared publicly.",
+  "description": "RED by API route, business counters, recent logs and requests with trace IDs for gatherly-api (OTLP to Grafana Cloud). Datasource uids are the Grafana Cloud defaults, so the dashboard can be shared publicly.",
   "templating": {
     "list": []
   },
@@ -801,7 +801,7 @@
     {
       "id": 16,
       "type": "row",
-      "title": "Logs and traces",
+      "title": "Logs and requests",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -849,11 +849,11 @@
     {
       "id": 18,
       "type": "table",
-      "title": "Recent API requests (spans)",
-      "description": "Latest API server spans from Tempo. The trace ID matches the logs above, the x-trace-id response header and Sentry events.",
+      "title": "Recent API requests",
+      "description": "From the request logs (public dashboards cannot query Tempo). Copy a trace ID to match the x-trace-id response header or a Sentry event.",
       "datasource": {
-        "type": "tempo",
-        "uid": "grafanacloud-traces"
+        "type": "loki",
+        "uid": "grafanacloud-logs"
       },
       "gridPos": {
         "x": 0,
@@ -865,61 +865,68 @@
         {
           "refId": "A",
           "datasource": {
-            "type": "tempo",
-            "uid": "grafanacloud-traces"
+            "type": "loki",
+            "uid": "grafanacloud-logs"
           },
-          "queryType": "traceql",
-          "query": "{resource.service.name=\"gatherly-api\" && kind=server && span.http.route=~\"/api/.+\"} | select(span.http.route, span.http.response.status_code)",
-          "limit": 20,
-          "tableType": "spans",
-          "spss": 1
+          "queryType": "range",
+          "maxLines": 50,
+          "expr": "{service_name=\"gatherly-api\"} |= \"request completed\" | keep trace_id, method, route, status, durationMs | route=~\"/api/.+\""
         }
       ],
       "transformations": [
         {
+          "id": "extractFields",
+          "options": {
+            "source": "labels",
+            "format": "auto",
+            "replace": false,
+            "keepTime": false
+          }
+        },
+        {
           "id": "organize",
           "options": {
             "excludeByName": {
-              "traceService": true,
-              "traceName": true,
-              "spanID": true,
-              "name": true,
-              "kind": true,
-              "service.name": true
+              "labels": true,
+              "Line": true,
+              "tsNs": true,
+              "id": true,
+              "labelTypes": true,
+              "detected_level": true,
+              "service_name": true,
+              "traceID": true,
+              "traceID (field)": true
             },
             "indexByName": {
-              "traceIdHidden": 0,
-              "time": 1,
-              "http.route": 2,
-              "http.response.status_code": 3,
-              "duration": 4
+              "Time": 0,
+              "method": 1,
+              "route": 2,
+              "status": 3,
+              "durationMs": 4,
+              "trace_id": 5
             },
             "renameByName": {
-              "traceIdHidden": "Trace ID",
-              "time": "Start",
-              "http.route": "Route",
-              "http.response.status_code": "Status",
-              "duration": "Duration"
+              "method": "Method",
+              "route": "Route",
+              "status": "Status",
+              "durationMs": "Duration (ms)",
+              "trace_id": "Trace ID"
             }
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
+      "options": {
+        "showHeader": true,
+        "sortBy": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "traceIdHidden"
-            },
-            "properties": [
-              {
-                "id": "custom.hidden",
-                "value": false
-              }
-            ]
+            "displayName": "Time",
+            "desc": true
           }
         ]
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       }
     }
   ]
