@@ -14,6 +14,64 @@ Built on free tiers: Grafana Cloud for traces, logs and metrics; Sentry for erro
 | Errors | Sentry Node, attached to the active trace | Sentry React with router integration and an error boundary screen | Sentry |
 | Health | `/healthz`, `/readyz`, `/version` | none | Probes, humans |
 
+## See it live (no account needed)
+
+Reviewers can see real telemetry from the hosted demo without a Grafana or Sentry account.
+
+| Where | What you see | How to get there |
+|---|---|---|
+| [Public Grafana dashboard](https://lankyholly1972.grafana.net/public-dashboards/9402737b590a4f538536e6057470aeba) | Request rate, errors and latency by API route; registrations, cancellations, events created; recent API logs; recent requests with their trace IDs. Read-only, time range picker on | Open the link |
+| Sentry shared issues: [browser error](https://khandev-s1.sentry.io/share/issue/5d7cc0bd2b5a4701aba7387a0b4b86d1/) and [API error](https://khandev-s1.sentry.io/share/issue/25e21197641d4401a8ebfddb8027efa0/) | A browser error and the API error from the same trace, with stack traces | Open the links |
+| Admin console, Observability tab | Live version, database readiness and uptime; links above; a **Trigger test error** button that sends a browser error and an API error on one trace and shows the trace ID and both Sentry event IDs | [Sign in as Sam (Admin)](https://gatherly--khanovicdev.replit.app/signin) (skip the onboarding steps), then Admin, then Observability |
+| `x-trace-id` response header | The trace ID of any API response, to find it in the dashboard's logs and requests panels or in Sentry | Browser developer tools, Network tab |
+
+A five-minute check: sign in as Sam, open the Observability tab, press **Trigger test error**, copy the trace ID, and find the same ID in the dashboard's **Recent API requests** table (the 500 on `/api/v1/admin/diagnostics/error`). The event count on the shared Sentry issues goes up by one.
+
+![Admin console, Observability tab](images/admin-observability.png)
+
+![Public Grafana dashboard: requests, errors, latency and business counters](images/grafana-public-dashboard.png)
+
+![Public Grafana dashboard: recent API logs and requests with trace IDs](images/grafana-public-logs.png)
+
+![Shared Sentry issue: the API diagnostic error with its stack trace](images/sentry-shared-issue.png)
+
+### Why public links instead of accounts
+
+| Option | Free tier reality | Verdict |
+|---|---|---|
+| Invite reviewers to Grafana and Sentry | Sentry's free plan has one seat. Grafana's free plan allows three users and needs each reviewer's email in advance | Does not fit anonymous reviewers |
+| Share one login | Credentials leave our control; a reviewer could change settings or tokens | Never |
+| Public, read-only links | Grafana public dashboards and Sentry shared issues need no account, cannot change anything, and can be revoked in one click | Chosen |
+
+### Guardrails
+
+| Risk | Control |
+|---|---|
+| Personal data in public panels | Request logs carry only method, route template, status, duration and trace ID; Fastify's default request log (raw URL and client IP) is off. The logs panel also uses a LogQL `keep` allowlist, so older lines with extra fields stay hidden. Email is redacted at the logger |
+| Personal data in Sentry | The API SDK collects no user info, cookies or bodies and only a short allowlist of request headers, so the proxy's client IP and Replit profile headers never leave the app. "Prevent Storing of IP Addresses" is on for both projects. Shared issues were created after both changes; older issues are deleted, not shared. Sentry still derives an approximate location (city) from the visitor's connection |
+| Free-form queries by viewers | Public dashboards run only the saved panel queries; there is no query editor or Explore |
+| Abuse of the test error | The diagnostics endpoint is admin-only and limited to one error every 10 seconds for the whole app |
+| Metric cardinality | Only API requests are traced and measured, labelled by route template; static files are skipped |
+| Stale or leaked links | Both links can be revoked or rotated from Grafana and Sentry at any time; no secret is embedded in them |
+
+### Production path
+
+| Today (demo) | Production |
+|---|---|
+| Public dashboard link | Single sign-on into Grafana with a read-only Viewer role mapped from the identity provider's groups; public dashboards turned off for anything with user data |
+| Shared Sentry issues | Sentry Team plan with SSO, team-scoped projects and per-person access; shared links off by default |
+| Demo admin can trigger test errors | Synthetic checks and a staging environment exercise the error path; no test-error endpoint in production |
+| Allowlisted log fields | Same allowlist, plus a written retention period and a data-processing agreement with each vendor |
+
+### Limits of the free setup
+
+| Limit | Effect |
+|---|---|
+| Public dashboards cannot query Tempo | The public dashboard lists recent requests and trace IDs from the logs; the full span waterfall needs a Grafana account |
+| Grafana Cloud trial ends 2026-11-08 | The stack then drops to the free tier: 10,000 active metric series, 50 GB of logs and 50 GB of traces a month, 14-day retention. Gatherly uses well under that: 350 to 550 active series per running build (none for static files), about 5 MB of logs and 15 MB of traces a day |
+| Scale to zero | After a quiet period the first request starts the instance, so panels show gaps and a slow first request |
+| Sentry free plan | One seat and a monthly error quota; the diagnostics rate limit keeps test errors far below it |
+
 ## How a request is traced
 
 ```mermaid
@@ -69,7 +127,8 @@ A registration produces one trace: the browser span from Sentry, then the API re
 |---|---|
 | JSON only, one event per line | Queryable in Loki without parsing rules |
 | `trace_id` and `span_id` injected on every line | Jump from a log line to the full trace |
-| Request log carries route template, status and duration | Matches the metrics, so logs explain spikes |
+| One request line with route template, status and duration | Matches the metrics, so logs explain spikes |
+| No client IP addresses, raw URLs or query strings | Search text and IPs are personal data; the route template is enough to debug |
 | Email addresses redacted | Personal data stays out of a third-party log store |
 | `info` for request outcomes, `warn` for expected rejections, `error` for failures | Alerts and searches stay meaningful |
 
@@ -96,20 +155,20 @@ Autoscale stops idle instances. Telemetry is batched in memory, so the API handl
 |---|---|---|
 | `GET /healthz` | Process is up | Liveness; never touches the database, so a database outage does not cause restart loops |
 | `GET /readyz` | Database answers a ping | Readiness; routes traffic only to instances that can serve it |
-| `GET /version` | Git SHA and build time | "Which build is live?" in seconds |
+| `GET /version` | Git SHA, build time and uptime | "Which build is live, and did it just restart?" in seconds |
 
 ## Dashboard
 
-The repository ships one Grafana dashboard definition (`ops/grafana/`).
+The repository ships one Grafana dashboard definition (`ops/grafana/dashboard.json`). It uses the default Grafana Cloud datasource names and no template variables, so the same file imports into any Grafana Cloud stack and can be shared publicly.
 
 | Panel | Shows |
 |---|---|
-| Request rate by route | Traffic shape |
-| Error rate by route | 5xx share; links to traces |
-| Latency p50 and p95 by route | Slow endpoints |
+| Requests per second, 5xx ratio, p95 and p99 latency | Health at a glance, API routes only |
+| Rate, errors and p95 latency by route | Which endpoint is busy, failing or slow |
+| Registrations confirmed and refused, cancellations, events created | Product activity over the selected range |
 | Registrations by result | Confirmed versus full versus duplicate over time |
-| Cancellations and events created | Product activity |
-| Recent error logs | Loki query filtered to `error`, each line linked to its trace |
+| Recent API logs | Allowlisted request lines and error lines |
+| Recent API requests | Time, method, route, status, duration and trace ID, built from the logs |
 
 ## Where to look
 
