@@ -22,6 +22,7 @@ export default defineConfig(
     extends: [reactHooks.configs.flat['recommended-latest'], reactRefresh.configs.vite],
     languageOptions: { globals: globals.browser },
   },
+  { files: ['apps/web/public/**/*.js'], languageOptions: { globals: globals.browser } },
   // shadcn/ui components are generated; they export variants next to components.
   {
     files: ['apps/web/src/components/ui/**'],

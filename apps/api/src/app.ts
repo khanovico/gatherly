@@ -21,6 +21,7 @@ import profileRoutes from './modules/profile/routes';
 import registrationsRoutes from './modules/registrations/routes';
 import savesRoutes from './modules/saves/routes';
 import { registerOpenApi } from './openapi';
+import { registerSecurityHeaders } from './security-headers';
 import { registerWeb } from './web';
 
 declare module 'fastify' {
@@ -64,6 +65,7 @@ export async function buildApp(opts: { db?: Db } = {}) {
 
   registerErrorHandling(app);
   registerRequestLogging(app);
+  await registerSecurityHeaders(app);
   await registerOpenApi(app);
   await app.register(
     async (api) => {

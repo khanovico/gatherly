@@ -12,16 +12,8 @@
     <meta property="og:title" content="Gatherly" />
     <meta property="og:image" content="/images/og.webp" />
     <link rel="icon" type="image/webp" href="/images/brand/mark.webp" />
-    <script>
-      // Apply the saved theme before first paint (same key as next-themes) to avoid a flash.
-      {
-        const theme = localStorage.getItem('theme') ?? 'system';
-        const dark =
-          theme === 'dark' ||
-          (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.classList.toggle('dark', dark);
-      }
-    </script>
+    <!-- Applies the saved theme before first paint. A file, not inline, so the CSP allows it. -->
+    <script src="/theme.js"></script>
   </head>
   <body>
     <div id="root"></div>
