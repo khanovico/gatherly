@@ -1,4 +1,6 @@
+import * as Sentry from '@sentry/react';
 import { Home, RotateCw } from 'lucide-react';
+import { useEffect } from 'react';
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
 import { Button } from '@/components/ui/button';
@@ -6,7 +8,11 @@ import { Component as NotFound } from '@/pages/not-found';
 
 export function ErrorBoundary() {
   const error = useRouteError();
-  if (isRouteErrorResponse(error) && error.status === 404) return <NotFound />;
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  useEffect(() => {
+    if (!notFound) Sentry.captureException(error);
+  }, [error, notFound]);
+  if (notFound) return <NotFound />;
 
   return (
     <section className="page-container py-16 sm:py-24">
