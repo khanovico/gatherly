@@ -1,5 +1,4 @@
-import { Persona, type UserSummary } from '@gatherly/shared';
-import { useQuery } from '@tanstack/react-query';
+import { Persona } from '@gatherly/shared';
 import { Check, Loader2, LogIn, Sparkles, UserPlus } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { ComingSoonDialog } from '@/components/coming-soon-dialog';
@@ -8,11 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { personaInfo } from '@/features/auth/personas';
-import { useDemoLogin } from '@/features/auth/use-demo-login';
-import { apiFetch } from '@/lib/api';
-import { queryKeys } from '@/lib/query-keys';
-
-type PersonaCard = { persona: Persona; user: UserSummary };
+import { useDemoLogin, usePersonas } from '@/features/auth/use-demo-login';
 
 /** Only same-site paths, so `?next=` cannot send people to another origin. */
 const safeNext = (next: string | null) =>
@@ -21,10 +16,7 @@ const safeNext = (next: string | null) =>
 export function Component() {
   const [params] = useSearchParams();
   const login = useDemoLogin(safeNext(params.get('next')));
-  const { data: personas } = useQuery({
-    queryKey: queryKeys.personas,
-    queryFn: () => apiFetch<PersonaCard[]>('/auth/personas'),
-  });
+  const { data: personas } = usePersonas();
 
   return (
     <section className="page-container py-12 sm:py-20">
