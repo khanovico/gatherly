@@ -222,7 +222,10 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     if (Date.now() - lastDiagnosticAt < 10_000)
       throw new AppError('RATE_LIMITED', 429, 'One test error every 10 seconds');
     lastDiagnosticAt = Date.now();
-    const error = new Error('Diagnostic test error triggered from the admin console');
+    // A unique message, or Sentry's dedupe drops every repeat after the first; grouping uses the stack.
+    const error = new Error(
+      `Diagnostic test error from the admin console at ${new Date().toISOString()}`,
+    );
     error.name = 'DiagnosticTestError';
     const sentryEventId = Sentry.captureException(error);
     request.log.error({ err: error }, 'diagnostic test error');

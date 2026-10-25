@@ -23,7 +23,9 @@ const formatUptime = (seconds: number) => {
 /** A browser error and the API's test error inside one span, so both land on the same trace. */
 const triggerTestErrors = () =>
   Sentry.startSpan({ name: 'admin.trigger-test-error', op: 'diagnostics' }, async () => {
-    const error = new Error('Diagnostic test error triggered in the browser');
+    const error = new Error(
+      `Diagnostic test error from the browser at ${new Date().toISOString()}`,
+    );
     error.name = 'DiagnosticTestError';
     const webEventId = Sentry.captureException(error);
     const res = await fetch('/api/v1/admin/diagnostics/error', { method: 'POST' });
