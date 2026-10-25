@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { events, registrations, users } from '../../db/schema';
+import { visibleEmail } from '../../lib/demo';
 import { AppError } from '../../lib/errors';
 import { assertOwnerOrAdmin, requireUser } from '../../lib/guards';
 import { businessMetrics } from '../../lib/metrics';
@@ -58,7 +59,11 @@ const organizerRoutes: FastifyPluginAsyncZod = async (app) => {
           ),
         )
         .orderBy(asc(registrations.createdAt));
-      return rows.map((r) => ({ ...r, registeredAt: r.registeredAt.toISOString() }));
+      return rows.map((r) => ({
+        ...r,
+        email: visibleEmail(r.email),
+        registeredAt: r.registeredAt.toISOString(),
+      }));
     },
   );
 

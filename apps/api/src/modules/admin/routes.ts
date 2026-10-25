@@ -8,13 +8,14 @@ import {
   paginated,
   type AdminUserPatch,
 } from '@gatherly/shared';
-import { and, asc, desc, eq, gt, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, like, or } from 'drizzle-orm';
 import * as Sentry from '@sentry/node';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { config } from '../../config';
 import { events, plans, registrations, subscriptions, users } from '../../db/schema';
 import { resetDemo } from '../../db/seed';
+import { DEMO_EMAIL_DOMAIN, isReadOnlyAccount, visibleEmail } from '../../lib/demo';
 import { AppError } from '../../lib/errors';
 import { requireAdmin } from '../../lib/guards';
 import { currentTraceId } from '../../lib/request-telemetry';
@@ -54,13 +55,16 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
       )
       .leftJoin(plans, eq(plans.id, subscriptions.planId));
 
-  // No active subscription means the free plan.
+  // No active subscription means the free plan. On the public demo, real accounts are read-only.
   const toAdminUser = ({
     plan,
     createdAt,
+    email,
     ...row
   }: Awaited<ReturnType<typeof selectUsers>>[0]) => ({
     ...row,
+    email: visibleEmail(email),
+    protected: row.protected || isReadOnlyAccount(email),
     plan: plan ?? 'free',
     createdAt: createdAt.toISOString(),
   });
@@ -103,8 +107,10 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => {
       const { q, page, pageSize } = request.query;
       const pattern = likePattern(q);
+      // Masked emails must not be searchable either, or a search would confirm an address exists.
+      const demoOnly = config.DEMO_MODE ? like(users.email, `%${DEMO_EMAIL_DOMAIN}`) : undefined;
       const where = pattern
-        ? or(ilike(users.name, pattern), ilike(users.email, pattern))
+        ? or(ilike(users.name, pattern), and(ilike(users.email, pattern), demoOnly))
         : undefined;
       const [rows, total] = await Promise.all([
         selectUsers()
@@ -131,6 +137,9 @@ const adminRoutes: FastifyPluginAsyncZod = async (app) => {
         (key) => patch[key] !== user[key],
       );
       if (changed.length === 0) return user;
+      if (isReadOnlyAccount(target.email)) {
+        throw new AppError('FORBIDDEN', 403, 'The public demo cannot change real accounts');
+      }
       if (user.protected) {
         throw new AppError(
           'PROTECTED_DEMO_ACCOUNT',

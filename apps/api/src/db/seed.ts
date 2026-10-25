@@ -1,5 +1,6 @@
 import { NEIGHBORHOODS } from '@gatherly/shared';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, like, sql } from 'drizzle-orm';
+import { DEMO_EMAIL_DOMAIN } from '../lib/demo';
 import type { Db } from './client';
 import type { Persona } from '@gatherly/shared';
 import { PERSONAS, ensurePersonas } from './personas';
@@ -34,7 +35,7 @@ const memberEmail = (name: string) =>
     .normalize('NFD')
     .replace(/[^\w ]/g, '')
     .toLowerCase()
-    .replace(' ', '.')}@gatherly.demo`;
+    .replace(' ', '.')}${DEMO_EMAIL_DOMAIN}`;
 
 const WEEKEND_DAY = { sat: 6, sun: 0 };
 
@@ -159,13 +160,28 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
       "rankerVersion" text, "requestId" text, "createdAt" timestamptz)`);
 };
 
-/** Wipes every event and non-persona user, then reseeds with dates relative to now. */
+/**
+ * Wipes demo data (events hosted by demo accounts, non-persona demo members), then reseeds with
+ * dates relative to now. Real sign-ups and their sessions stay; their seats on demo events go.
+ */
 export const resetDemo = async (db: Db) => {
   await ensurePersonas(db);
   await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${SEED_LOCK})`);
-    await tx.delete(events); // cascades to registrations
-    await tx.delete(users).where(eq(users.isProtected, false)); // cascades to sessions, subscriptions
+    const demoUsers = tx
+      .select({ id: users.id })
+      .from(users)
+      .where(like(users.email, `%${DEMO_EMAIL_DOMAIN}`));
+    await tx.delete(events).where(inArray(events.organizerId, demoUsers)); // cascades to registrations
+    // Cascades to sessions, subscriptions.
+    await tx
+      .delete(users)
+      .where(and(eq(users.isProtected, false), like(users.email, `%${DEMO_EMAIL_DOMAIN}`)));
+    // Events left are hosted by real accounts: drop the seats the deleted members held there.
+    await tx.execute(sql`
+      update ${events} e set registered_count = (
+        select count(*) from ${registrations} r
+        where r.event_id = e.id and r.status in ('pending_payment', 'confirmed'))`);
     await insertDemoContent(tx, new Date());
   });
 };

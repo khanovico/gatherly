@@ -80,7 +80,9 @@ export function UserActions({ user }: { user: AdminUser }) {
             </Button>
           </span>
         </TooltipTrigger>
-        <TooltipContent>Demo personas are protected so the demo keeps working</TooltipContent>
+        <TooltipContent>
+          Demo personas and real accounts can't be changed on the public demo
+        </TooltipContent>
       </Tooltip>
     );
   }

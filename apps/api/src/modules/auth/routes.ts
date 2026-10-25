@@ -7,6 +7,7 @@ import { config } from '../../config';
 import { PERSONAS } from '../../db/personas';
 import { users } from '../../db/schema';
 import { SESSION_COOKIE, endSession, startSession, toMe } from '../../lib/auth';
+import { isDemoEmail } from '../../lib/demo';
 import { AppError } from '../../lib/errors';
 import { requireUser } from '../../lib/guards';
 import { rateLimit } from '../../lib/rate-limit';
@@ -60,6 +61,14 @@ const authRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const { name, email, password } = request.body;
+      // Demo reset deletes these accounts, so a real one must never use the domain.
+      if (isDemoEmail(email)) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          400,
+          'This email domain is reserved for demo accounts',
+        );
+      }
       const [row] = await app.db
         .insert(users)
         .values({ name, email, passwordHash: await hashPassword(password) })

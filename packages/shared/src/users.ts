@@ -35,11 +35,12 @@ export const me = z.object({
 export type Me = z.infer<typeof me>;
 
 export const adminUser = userSummary.extend({
-  email: z.email(),
+  /** Masked (`j***@example.com`) for real accounts on the public demo. */
+  email: z.string(),
   role: Role,
   status: UserStatus,
   plan: PlanCode,
-  /** Seeded demo personas: cannot be suspended, demoted or downgraded. */
+  /** Cannot be suspended, demoted or downgraded: demo personas, and real accounts on the public demo. */
   protected: z.boolean(),
   createdAt: isoDateTime,
 });

@@ -168,7 +168,8 @@ export type MyRegistrations = z.infer<typeof myRegistrations>;
 export const attendee = z.object({
   registrationId: z.uuid(),
   user: userSummary,
-  email: z.email(),
+  /** Masked (`j***@example.com`) for real accounts on the public demo. */
+  email: z.string(),
   status: RegistrationStatus,
   registeredAt: isoDateTime,
 });
