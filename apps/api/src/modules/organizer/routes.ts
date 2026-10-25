@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { events, registrations, users } from '../../db/schema';
 import { AppError } from '../../lib/errors';
 import { assertOwnerOrAdmin, requireUser } from '../../lib/guards';
+import { businessMetrics } from '../../lib/metrics';
 import {
   ACTIVE_STATUSES,
   releaseSeat,
@@ -77,6 +78,7 @@ const organizerRoutes: FastifyPluginAsyncZod = async (app) => {
       const { registration: row } = await app.db.transaction((tx) =>
         releaseSeat(tx, eq(registrations.id, request.params.id)),
       );
+      businessMetrics.cancellation();
       return toRegistration(row);
     },
   );
