@@ -12,7 +12,8 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "db:migrate": "pnpm --filter @gatherly/api db:migrate"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
