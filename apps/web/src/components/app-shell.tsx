@@ -25,3 +25,12 @@ export function AppShell() {
     </div>
   );
 }
+
+/** Shown while the first page chunk loads. */
+export function ShellFallback() {
+  return (
+    <div className="grid min-h-svh place-items-center">
+      <img src="/images/brand/mark.webp" alt="Loading Gatherly" className="size-12 animate-pulse" />
+    </div>
+  );
+}
