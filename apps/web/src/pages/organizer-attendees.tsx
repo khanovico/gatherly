@@ -1,6 +1,10 @@
-import { Users } from 'lucide-react';
-import { PagePlaceholder } from '@/components/page-placeholder';
+import { RequireEntitlement } from '@/components/require-entitlement';
+import { AttendeesPage } from '@/features/organizer/attendees-page';
 
 export function Component() {
-  return <PagePlaceholder title="Attendees" icon={Users} />;
+  return (
+    <RequireEntitlement entitlement="events:create">
+      <AttendeesPage />
+    </RequireEntitlement>
+  );
 }
