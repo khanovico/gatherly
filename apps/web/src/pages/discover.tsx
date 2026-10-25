@@ -1,25 +1,18 @@
 import { CATEGORIES, type Category } from '@gatherly/shared';
-import { ArrowUp, CalendarDays, RotateCw, Search } from 'lucide-react';
+import { ArrowUp, RotateCw, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
 import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
+import { DateFilter } from '@/features/events/date-filter';
 import { categoryMeta, dateFilterBounds, type DateFilterValue } from '@/features/events/lib';
 import { useInfiniteEvents } from '@/features/events/queries';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 12;
-const whenLabels = { any: 'Any date', weekend: 'This weekend', week: 'Next 7 days' };
 
 export function Component() {
   const [params, setParams] = useSearchParams();
@@ -88,24 +81,11 @@ export function Component() {
             className="h-11 rounded-full pl-9"
           />
         </form>
-        <Select
-          value={dates.when ?? 'any'}
-          onValueChange={(value) =>
-            update({ when: value === 'any' ? undefined : value, from: undefined, to: undefined })
-          }
-        >
-          <SelectTrigger aria-label="Date" className="h-11! w-full rounded-full sm:w-48">
-            <CalendarDays className="text-muted-foreground" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(whenLabels).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <DateFilter
+          value={dates}
+          onChange={(next) => update({ when: next.when, from: next.from, to: next.to })}
+          className="sm:w-56"
+        />
       </div>
       <div
         ref={chips}
