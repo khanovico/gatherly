@@ -13,23 +13,25 @@ export function Component() {
   const navigate = useNavigate();
   return (
     <RequireEntitlement entitlement="events:create">
-      <div className="page-container max-w-3xl py-8 sm:py-12">
+      <div className="page-container max-w-6xl py-8 sm:py-12">
         <p className="text-primary text-sm font-medium">New event</p>
         <h1 className="mt-1 text-3xl font-semibold sm:text-4xl">Create an event</h1>
         <p className="text-muted-foreground mt-1 mb-8">
           It goes live as soon as you publish. You can edit it until it starts.
         </p>
-        <EventForm
-          defaultValues={newEventForm()}
-          submitLabel="Publish event"
-          onSubmit={async (input) => {
-            const event = await apiFetch<EventDetail>('/events', { method: 'POST', body: input });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.events.all });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.my.events });
-            toast.success(`“${event.title}” is live`);
-            navigate(`/events/${event.id}`);
-          }}
-        />
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <EventForm
+            defaultValues={newEventForm()}
+            submitLabel="Publish event"
+            onSubmit={async (input) => {
+              const event = await apiFetch<EventDetail>('/events', { method: 'POST', body: input });
+              await queryClient.invalidateQueries({ queryKey: queryKeys.events.all });
+              await queryClient.invalidateQueries({ queryKey: queryKeys.my.events });
+              toast.success(`“${event.title}” is live`);
+              navigate(`/events/${event.id}`);
+            }}
+          />
+        </div>
       </div>
     </RequireEntitlement>
   );
