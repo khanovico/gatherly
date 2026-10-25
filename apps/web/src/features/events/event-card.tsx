@@ -1,19 +1,58 @@
-import type { EventSummary } from '@gatherly/shared';
-import { Globe, MapPin } from 'lucide-react';
+import type { EventSummary, ReasonKind } from '@gatherly/shared';
+import {
+  Clock,
+  EllipsisVertical,
+  EyeOff,
+  Flame,
+  Globe,
+  Heart,
+  MapPin,
+  Navigation,
+  Sparkles,
+  Star,
+  Tag,
+  type LucideIcon,
+} from 'lucide-react';
 import { Link } from 'react-router';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMe } from '@/hooks/use-me';
 import { CategoryBadge } from '@/features/events/category-badge';
 import { EventDateTime } from '@/features/events/event-date-time';
-import { eventLocation } from '@/features/events/lib';
+import { hideEvent, useIsHidden, useSaveToggle } from '@/features/events/feedback';
+import { eventLocation, formatDistance } from '@/features/events/lib';
 import { SeatsMeter } from '@/features/events/seats-meter';
 import { cn } from '@/lib/utils';
 
 const overlay = 'bg-background/90 shadow-sm backdrop-blur';
+const pill = cn('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5', overlay);
+const reasonIcons: Record<ReasonKind, LucideIcon> = {
+  interest: Sparkles,
+  tag: Tag,
+  distance: Navigation,
+  time: Clock,
+  popular: Flame,
+  new: Star,
+};
 
-/** Cover-image card linking to the event page. The whole card is clickable via the title link. */
+/**
+ * Cover-image card linking to the event page. The whole card is clickable via the title link;
+ * Save and "Not interested" sit above it. Ranked results show why they were picked.
+ */
 export function EventCard({ event, className }: { event: EventSummary; className?: string }) {
+  const { data: me } = useMe();
+  const toggleSave = useSaveToggle(event);
+  if (useIsHidden(event.id)) return null;
   const LocationIcon = event.format === 'online' ? Globe : MapPin;
   const cancelled = event.status === 'cancelled';
+  // The distance badge already says how far; reasons explain the rest.
+  const reasons = (event.reasons ?? []).filter((r) => r.kind !== 'distance').slice(0, 2);
   return (
     <article
       className={cn(
@@ -33,18 +72,51 @@ export function EventCard({ event, className }: { event: EventSummary; className
           )}
         />
         <CategoryBadge category={event.category} className={cn('absolute top-3 left-3', overlay)} />
-        <span
-          className={cn(
-            'absolute top-3 right-3 rounded-full px-2.5 py-0.5 text-xs font-semibold',
-            overlay,
-            cancelled && 'text-destructive',
-          )}
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-pressed={Boolean(event.saved)}
+          aria-label={event.saved ? `Unsave ${event.title}` : `Save ${event.title}`}
+          onClick={toggleSave}
+          className={cn(overlay, 'absolute top-2.5 right-2.5 z-10 rounded-full active:scale-90')}
         >
-          {cancelled ? 'Cancelled' : event.priceCents === 0 ? 'Free' : 'Paid'}
-        </span>
+          <Heart className={cn('transition', event.saved && 'fill-rose-500 text-rose-500')} />
+        </Button>
+        <div className="absolute bottom-3 left-3 flex gap-1.5 text-xs font-semibold">
+          <span className={cn(pill, cancelled && 'text-destructive')}>
+            {cancelled ? 'Cancelled' : event.priceCents === 0 ? 'Free' : 'Paid'}
+          </span>
+          {event.distanceKm !== undefined && (
+            <span className={pill}>
+              <Navigation aria-hidden className="size-3" />
+              {formatDistance(event.distanceKm)}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <EventDateTime event={event} compact />
+        <div className="flex items-start justify-between gap-2">
+          <EventDateTime event={event} compact />
+          {me && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`More options for ${event.title}`}
+                  className="relative z-10 -mt-1 -mr-2 shrink-0"
+                >
+                  <EllipsisVertical />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onSelect={() => hideEvent(event)}>
+                  <EyeOff /> Not interested
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
         <h3 className="line-clamp-2 text-lg leading-snug font-semibold">
           <Link to={`/events/${event.id}`} className="outline-none after:absolute after:inset-0">
             {event.title}
@@ -54,6 +126,20 @@ export function EventCard({ event, className }: { event: EventSummary; className
           <LocationIcon aria-hidden className="size-4 shrink-0" />
           <span className="truncate">{eventLocation(event)}</span>
         </p>
+        <ul aria-label="Why you're seeing this" className="flex flex-wrap gap-1.5 empty:hidden">
+          {reasons.map(({ kind, label }) => {
+            const Icon = reasonIcons[kind];
+            return (
+              <li
+                key={label}
+                className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+              >
+                <Icon aria-hidden className="size-3" />
+                {label}
+              </li>
+            );
+          })}
+        </ul>
         {!cancelled && <SeatsMeter seats={event} className="mt-auto pt-1" />}
       </div>
     </article>

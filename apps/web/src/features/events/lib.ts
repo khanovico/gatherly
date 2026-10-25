@@ -74,3 +74,7 @@ export function dateFilterBounds({ when, from, to }: DateFilterValue) {
     to: iso(addDays(today, toSaturday + 2)),
   };
 }
+
+/** "850 m" under a kilometre, else "2.4 km". */
+export const formatDistance = (km: number) =>
+  km < 1 ? `${Math.round(km * 100) * 10} m` : `${km.toFixed(1)} km`;

@@ -17,6 +17,7 @@ export const queryKeys = {
     registrations: ['my', 'registrations'] as const,
     events: ['my', 'events'] as const,
     profile: ['my', 'profile'] as const,
+    saved: ['my', 'saved'] as const,
   },
   admin: {
     all: ['admin'] as const,
