@@ -11,6 +11,8 @@ Everything below is a set of **assumptions to validate with business stakeholder
 | Organizer subscription | Organizers | Premium plan: create events, later sell tickets and see analytics | Stripe Billing | Next |
 | Ticketing fee | Attendees or organizers (organizer chooses) | Paid tickets with checkout, payouts and refunds | Stripe Connect Express | Later |
 
+**Biggest risk: supply-side cold start.** Charging organizers before there are attendees to sell to can keep the events away, and without events there is nothing for attendees. That is why phase 0 of the [rollout](#9-rollout) validates the paywall before any Stripe Billing work.
+
 **Why two streams.** Subscriptions give predictable revenue and filter out spam organizers. Ticket fees scale with organizer success, so Gatherly earns more when organizers do. Free events stay free for attendees, which keeps the community side of the marketplace healthy.
 
 ## 1. Assumptions to validate
@@ -207,6 +209,7 @@ Planned tables: `connected_accounts` (organizer, Stripe account, charges and pay
 
 | Phase | Scope | Exit criterion |
 |---|---|---|
+| 0. Validate the paywall | Founding organizers get Premium free for a fixed period (admin plan grant, `comp`); a comparison cohort gets a free tier capped at a few events a month. Measure events created per organizer, checkout attempts, retention and interview answers | Evidence that organizers will pay without starving supply; if not, ship capped free creation and monetize tickets instead |
 | 1. Subscriptions | Stripe Billing checkout and customer portal, webhooks drive plan and entitlements | Organizers can upgrade, downgrade and lapse with correct access |
 | 2. Paid tickets | Connect Express onboarding, seat holds, destination charges, ledger, payouts after the event | First paid event settles and reconciles to the cent |
 | 3. Refund and dispute automation | Refund windows, automatic refunds on cancellation, dispute handling | Refund and dispute rates tracked on a dashboard |
