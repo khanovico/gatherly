@@ -55,7 +55,7 @@ export function EventActions({ event }: { event: EventSummary }) {
         open={confirming}
         onOpenChange={setConfirming}
         title={`Cancel “${event.title}”?`}
-        description={`The event page will show it as cancelled and registration closes. ${event.registeredCount} registered ${event.registeredCount === 1 ? 'attendee stays' : 'attendees stay'} on the list. This can't be undone.`}
+        description={`The event page will show it as cancelled and registration closes. ${event.registeredCount} ${event.registeredCount === 1 ? 'registration is' : 'registrations are'} cancelled too. This can't be undone.`}
         confirmLabel="Cancel event"
         pending={cancel.isPending}
         onConfirm={() => cancel.mutate()}

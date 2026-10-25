@@ -74,3 +74,27 @@ it('survives one member registering and cancelling at the same time', async () =
   const { registeredCount, confirmed } = await seatCounts(ctx.db, event.id);
   expect(registeredCount).toBe(confirmed);
 });
+
+it('cancelling an event cancels its registrations, once, and only before it starts', async () => {
+  const organizer = await login(ctx.app, 'organizer');
+  const member = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, organizer.userId, 10);
+  const started = await createEvent(ctx.db, organizer.userId, 10, { startsAt: new Date() });
+  const cancel = (id: string) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/api/v1/events/${id}/cancel`,
+      headers: { cookie: organizer.cookie },
+    });
+  await register(event.id, member.cookie);
+
+  expect((await cancel(event.id)).json()).toMatchObject({
+    status: 'cancelled',
+    registeredCount: 0,
+  });
+  expect(await seatCounts(ctx.db, event.id)).toEqual({ registeredCount: 0, confirmed: 0 });
+  const again = await cancel(event.id);
+  expect([again.statusCode, again.json().code]).toEqual([409, 'EVENT_CANCELLED']);
+  const late = await cancel(started.id);
+  expect([late.statusCode, late.json().code]).toEqual([409, 'EVENT_STARTED']);
+});

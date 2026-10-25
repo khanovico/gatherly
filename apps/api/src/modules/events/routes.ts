@@ -17,6 +17,7 @@ import { AppError } from '../../lib/errors';
 import { businessMetrics } from '../../lib/metrics';
 import { assertOwnerOrAdmin, requireEntitlement, requireUser } from '../../lib/guards';
 import { buildFeed } from '../../ranking/feed';
+import { ACTIVE_STATUSES } from '../registrations/seats';
 
 type EventRow = typeof events.$inferSelect;
 
@@ -160,12 +161,30 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
     { schema: { params, response: { 200: eventDetail } } },
     async (request) => {
       const stored = await findOwnedEvent(request, request.params.id);
-      const [event] = await app.db
-        .update(events)
-        .set({ status: 'cancelled' })
-        .where(eq(events.id, stored.id))
-        .returning();
-      return loadDetail(event!, request.user);
+      if (stored.status === 'cancelled') {
+        throw new AppError('EVENT_CANCELLED', 409, 'This event is already cancelled');
+      }
+      if (stored.startsAt <= new Date()) {
+        throw new AppError('EVENT_STARTED', 409, 'Events cannot be cancelled once they start');
+      }
+      // Event row first, then its registrations: the same lock order as registering.
+      const event = await app.db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(events)
+          .set({ status: 'cancelled', registeredCount: 0 })
+          .where(and(eq(events.id, stored.id), eq(events.status, 'published')))
+          .returning();
+        // Another request cancelled it after the read above.
+        if (!row) throw new AppError('EVENT_CANCELLED', 409, 'This event is already cancelled');
+        await tx
+          .update(registrations)
+          .set({ status: 'cancelled', cancelledAt: new Date() })
+          .where(
+            and(eq(registrations.eventId, row.id), inArray(registrations.status, ACTIVE_STATUSES)),
+          );
+        return row;
+      });
+      return loadDetail(event, request.user);
     },
   );
 };
