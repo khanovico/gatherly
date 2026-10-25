@@ -68,7 +68,7 @@ Open [localhost:5173](http://localhost:5173). Run the tests with `pnpm test`; li
 |---|---|---|
 | In demo mode anyone can act as Admin | Reviewers need every role instantly; personas are protected, real accounts are read-only and their emails masked, reset removes only demo-hosted events and seeded members | `DEMO_MODE` off in production; admins through an identity provider with MFA |
 | No email verification or password reset | Enough for each visitor to keep their own preferences | Hosted identity or OAuth ([ADR 0008](docs/adr/0008-password-signup.md)) |
-| Rate limits are counted per instance, in memory | One small instance serves the demo | Shared store (Redis or Postgres) so limits hold across instances |
+| Rate limits are counted per instance, in memory | With N instances a client gets up to N times the limit; cheap brute-force protection is enough for a demo | Shared store (Redis or Postgres) so limits hold across instances |
 | **For you** ranks a bounded pool of the soonest matching events | Ranking in memory is simple and explainable at one-city scale | Candidate retrieval in the database (PostGIS, search engine) |
 | One environment, no staging; mobile apps are architecture only | Zero-cost hosting; the API is versioned and client-agnostic | Staging and production; native clients on the same API |
 

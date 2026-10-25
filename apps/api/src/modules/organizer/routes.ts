@@ -27,7 +27,7 @@ import { events, registrations, users } from '../../db/schema';
 import { config } from '../../config';
 import { DEMO_EMAIL_DOMAIN, visibleEmail } from '../../lib/demo';
 import { AppError } from '../../lib/errors';
-import { assertOwnerOrAdmin, requireUser } from '../../lib/guards';
+import { assertCanManage, assertOwnerOrAdmin, requireUser } from '../../lib/guards';
 import { businessMetrics } from '../../lib/metrics';
 import {
   ACTIVE_STATUSES,
@@ -151,12 +151,13 @@ const organizerRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => {
       const user = requireUser(request);
       const [found] = await app.db
-        .select({ organizerId: events.organizerId })
+        .select({ id: users.id, email: users.email })
         .from(registrations)
         .innerJoin(events, eq(events.id, registrations.eventId))
+        .innerJoin(users, eq(users.id, events.organizerId))
         .where(eq(registrations.id, request.params.id));
       if (!found) throw new AppError('NOT_FOUND', 404, 'Registration not found');
-      assertOwnerOrAdmin(user, found.organizerId);
+      assertCanManage(user, found);
       const { registration: row } = await app.db.transaction((tx) =>
         releaseSeat(tx, eq(registrations.id, request.params.id)),
       );

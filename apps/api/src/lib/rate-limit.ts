@@ -10,7 +10,8 @@ type Options = {
 
 /**
  * Fixed-window limiter kept in this process's memory, so each API instance counts on its own and
- * a restart clears it. The demo runs one instance; more instances need a shared store (roadmap).
+ * a restart clears it. With N instances (Autoscale) a client gets up to N times the limit until a
+ * shared store replaces this (roadmap).
  * Each call gets its own counters. Key on the IP as an `onRequest` hook; key on the body (it is
  * parsed and validated by then) as a `preHandler` hook. `request.ip` is only as good as the
  * `TRUST_PROXY_HOPS` setting.

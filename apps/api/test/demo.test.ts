@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { users } from '../src/db/schema';
+import { registrations, users } from '../src/db/schema';
 import { resetDemo } from '../src/db/seed';
-import { login, signedInMember, startApp } from './setup';
+import { createEvent, login, signedInMember, startApp } from './setup';
 
 let ctx: Awaited<ReturnType<typeof startApp>>;
 beforeAll(async () => {
@@ -33,4 +33,26 @@ it('keeps real accounts private, read-only and out of the demo reset', async () 
 
   await resetDemo(ctx.db);
   expect(await ctx.db.$count(users, eq(users.id, real.userId))).toBe(1);
+});
+
+it('lets the demo admin view but not change events that real accounts host', async () => {
+  const host = await signedInMember(ctx.db);
+  const guest = await signedInMember(ctx.db);
+  const event = await createEvent(ctx.db, host.userId, 10, { registeredCount: 1 });
+  const [seat] = await ctx.db
+    .insert(registrations)
+    .values({ eventId: event.id, userId: guest.userId })
+    .returning();
+  const sam = await login(ctx.app, 'admin');
+  const admin = (method: 'GET' | 'POST' | 'PATCH', url: string, payload?: object) =>
+    ctx.app.inject({ method, url: `/api/v1${url}`, headers: { cookie: sam.cookie }, payload });
+
+  expect((await admin('GET', `/events/${event.id}/registrations`)).statusCode).toBe(200);
+  for (const res of [
+    await admin('PATCH', `/events/${event.id}`, { capacity: 20 }),
+    await admin('POST', `/events/${event.id}/cancel`),
+    await admin('POST', `/registrations/${seat!.id}/cancel`),
+  ]) {
+    expect([res.statusCode, res.json().code]).toEqual([403, 'FORBIDDEN']);
+  }
 });

@@ -15,7 +15,7 @@ import { events, registrations, users } from '../../db/schema';
 import type { AuthUser } from '../../lib/auth';
 import { AppError } from '../../lib/errors';
 import { businessMetrics } from '../../lib/metrics';
-import { assertOwnerOrAdmin, requireEntitlement, requireUser } from '../../lib/guards';
+import { assertCanManage, requireEntitlement, requireUser } from '../../lib/guards';
 import { buildFeed } from '../../ranking/feed';
 import { ACTIVE_STATUSES } from '../registrations/seats';
 
@@ -56,7 +56,11 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
   /** Loads the stored event for a write by its organizer or an admin. */
   const findOwnedEvent = async (request: FastifyRequest, id: string) => {
     const event = await findEvent(id);
-    assertOwnerOrAdmin(requireUser(request), event.organizerId);
+    const [organizer] = await app.db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, event.organizerId));
+    assertCanManage(requireUser(request), organizer!);
     return event;
   };
 

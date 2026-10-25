@@ -8,8 +8,9 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   GIT_SHA: z.string().default('dev'),
   BUILD_TIME: z.string().optional(),
-  // Reverse proxies in front of the app (Replit: 1). Only their X-Forwarded-For entries are
-  // believed; anything a client adds before them is ignored, so it cannot dodge rate limits.
+  // Reverse proxies in front of the app (Replit Autoscale: 4). Only their X-Forwarded-For entries
+  // are believed; anything a client adds before them is ignored, so it cannot dodge rate limits.
+  // Replit documents no client-IP header a client cannot forge, so the count is measured, not given.
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   // Public demo: persona sign-in, demo reset and the boot-time seed. Off means none of them exist.
   DEMO_MODE: z.stringbool().default(false),

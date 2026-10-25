@@ -1,4 +1,4 @@
-import Fastify, { LogController } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
   validatorCompiler,
@@ -44,6 +44,28 @@ const modules = [
   discoverRoutes,
 ];
 
+/**
+ * The hop count describes the hosting, which can change under us. A chain shorter than the count
+ * means a client could prepend entries and choose its own IP: warn once so the logs show it.
+ * Longer chains are normal (clients may send their own header) and only cost precision.
+ */
+const warnOnProxyMismatch = (app: FastifyInstance) => {
+  if (config.TRUST_PROXY_HOPS === 0) return;
+  let warned = false;
+  app.addHook('onRequest', async (request) => {
+    // No header at all: a direct call (health probe), not a request that came through the proxies.
+    const forwarded = request.headers['x-forwarded-for'];
+    if (warned || !forwarded) return;
+    const entries = String(forwarded).split(',').length;
+    if (entries >= config.TRUST_PROXY_HOPS) return;
+    warned = true;
+    request.log.warn(
+      { entries, hops: config.TRUST_PROXY_HOPS },
+      'X-Forwarded-For is shorter than TRUST_PROXY_HOPS: lower it, or clients can pick their IP',
+    );
+  });
+};
+
 /** Pass `db` to share a connection (tests); otherwise the app opens and closes its own pool. */
 export async function buildApp(opts: { db?: Db } = {}) {
   const app = Fastify({
@@ -56,6 +78,7 @@ export async function buildApp(opts: { db?: Db } = {}) {
     // Trust only the last TRUST_PROXY_HOPS X-Forwarded-For entries: the ones our own proxies appended.
     trustProxy: (_address, hop) => hop < config.TRUST_PROXY_HOPS,
   });
+  warnOnProxyMismatch(app);
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 

@@ -57,7 +57,12 @@ export const buildFeed = async (
     const rows = await loadCandidates(db, filters, { sort, page, pageSize });
     // The ranker only explains here: the page keeps its SQL order.
     const explained = new Map(ranker.rank(locate(rows, origin), ctx).map((r) => [r.id, r]));
-    const total = rows[0]?.total ?? 0;
+    // Past the last page no row carries the window count, so page 1 supplies it.
+    const counted =
+      rows.length || page === 1
+        ? rows
+        : await loadCandidates(db, filters, { sort, page: 1, pageSize: 1 });
+    const total = counted[0]?.total ?? 0;
     feed = { items: rows.map((r) => explained.get(r.id)!), total, totalCapped: false };
   }
   return {
