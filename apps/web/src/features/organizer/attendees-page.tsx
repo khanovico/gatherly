@@ -1,11 +1,17 @@
-import type { Attendee, EventDetail } from '@gatherly/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Attendee, EventDetail, Paginated } from '@gatherly/shared';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { ArrowLeft, Download, ExternalLink, Search, UserMinus } from 'lucide-react';
-import { useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { IllustratedState } from '@/components/illustrated-state';
+import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,17 +22,27 @@ import { EventDateTime } from '@/features/events/event-date-time';
 import { useEvent } from '@/features/events/queries';
 import { SeatsMeter } from '@/features/events/seats-meter';
 import { OrganizerError } from '@/features/organizer/organizer-error';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, errorMessage, nextPage } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
+
+const fetchAttendees = (id: string, page: number, q = '') =>
+  apiFetch<Paginated<Attendee>>(
+    `/events/${id}/registrations?${new URLSearchParams({ q, page: String(page), pageSize: '50' })}`,
+  );
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export function AttendeesPage() {
   const { id = '' } = useParams();
   const event = useEvent(id);
-  const attendees = useQuery({
-    queryKey: queryKeys.events.attendees(id),
-    queryFn: () => apiFetch<Attendee[]>(`/events/${id}/registrations`),
+  const [query, setQuery] = useState('');
+  const q = useDeferredValue(query.trim());
+  const attendees = useInfiniteQuery({
+    queryKey: [...queryKeys.events.attendees(id), q],
+    queryFn: ({ pageParam }) => fetchAttendees(id, pageParam, q),
+    initialPageParam: 1,
+    getNextPageParam: nextPage,
+    placeholderData: keepPreviousData,
   });
   const error = attendees.error ?? event.error;
   const retry = () => void Promise.all([event.refetch(), attendees.refetch()]);
@@ -41,10 +57,19 @@ export function AttendeesPage() {
       </Button>
       {event.data ? <EventHeader event={event.data} /> : <Skeleton className="mt-4 h-28" />}
       {attendees.data && event.data ? (
-        <AttendeeList event={event.data} attendees={attendees.data} />
+        <AttendeeList
+          event={event.data}
+          attendees={attendees.data.pages.flatMap((page) => page.items)}
+          query={query}
+          onQueryChange={setQuery}
+        />
       ) : (
         <Skeleton className="mt-8 h-80 rounded-xl" />
       )}
+      <LoadMoreSentinel
+        onVisible={() => void attendees.fetchNextPage()}
+        disabled={!attendees.hasNextPage || attendees.isFetching}
+      />
     </div>
   );
 }
@@ -75,8 +100,14 @@ function EventHeader({ event }: { event: EventDetail }) {
   );
 }
 
-function AttendeeList({ event, attendees }: { event: EventDetail; attendees: Attendee[] }) {
-  const [query, setQuery] = useState('');
+type AttendeeListProps = {
+  event: EventDetail;
+  attendees: Attendee[];
+  query: string;
+  onQueryChange: (query: string) => void;
+};
+
+function AttendeeList({ event, attendees, query, onQueryChange }: AttendeeListProps) {
   const [removing, setRemoving] = useState<Attendee | null>(null);
   const queryClient = useQueryClient();
   const remove = useMutation({
@@ -91,10 +122,10 @@ function AttendeeList({ event, attendees }: { event: EventDetail; attendees: Att
       toast.success(`${attendee.user.name} was removed`);
     },
   });
-  const needle = query.trim().toLowerCase();
-  const shown = attendees.filter((a) => `${a.user.name} ${a.email}`.toLowerCase().includes(needle));
+  const exportCsv = () =>
+    downloadCsv(event).catch((err: unknown) => toast.error(errorMessage(err)));
 
-  if (attendees.length === 0) {
+  if (event.registeredCount === 0) {
     return (
       <Card className="mt-8">
         <IllustratedState
@@ -109,25 +140,25 @@ function AttendeeList({ event, attendees }: { event: EventDetail; attendees: Att
     <Card className="mt-8 gap-0 py-0">
       <div className="flex flex-wrap items-center gap-3 border-b p-4">
         <h2 className="text-lg font-semibold">
-          {attendees.length} {attendees.length === 1 ? 'attendee' : 'attendees'}
+          {event.registeredCount} {event.registeredCount === 1 ? 'attendee' : 'attendees'}
         </h2>
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
           <Input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Search name or email"
             aria-label="Search attendees"
             className="pl-8"
           />
         </div>
-        <Button variant="outline" onClick={() => downloadCsv(event.title, attendees)}>
+        <Button variant="outline" onClick={() => void exportCsv()}>
           <Download /> Export CSV
         </Button>
       </div>
       <ul className="divide-y">
-        {shown.map((attendee) => (
+        {attendees.map((attendee) => (
           <li key={attendee.registrationId} className="flex items-center gap-3 px-4 py-3">
             <Avatar size="lg">
               <AvatarImage src={attendee.user.avatarUrl ?? undefined} alt="" />
@@ -157,7 +188,7 @@ function AttendeeList({ event, attendees }: { event: EventDetail; attendees: Att
           </li>
         ))}
       </ul>
-      {shown.length === 0 && (
+      {attendees.length === 0 && (
         <p className="text-muted-foreground p-8 text-center text-sm">
           No attendees match “{query}”.
         </p>
@@ -186,7 +217,14 @@ const initials = (name: string) =>
 /** Leading = + - @ would run as a formula in spreadsheet apps. */
 const csvCell = (value: string) => `"${value.replace(/^[=+\-@]/, "'$&").replaceAll('"', '""')}"`;
 
-function downloadCsv(title: string, attendees: Attendee[]) {
+/** Every attendee, not just the pages on screen, 50 per request. */
+async function downloadCsv({ id, title }: EventDetail) {
+  const attendees: Attendee[] = [];
+  for (let page: number | undefined = 1; page;) {
+    const res = await fetchAttendees(id, page);
+    attendees.push(...res.items);
+    page = nextPage(res);
+  }
   const rows = [
     ['Name', 'Email', 'Registered at'],
     ...attendees.map((a) => [a.user.name, a.email, a.registeredAt]),
