@@ -69,7 +69,7 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
                 role="combobox"
                 aria-expanded={open}
                 aria-labelledby={`${id}-home ${id}-value`}
-                className="h-11 flex-1 justify-between font-normal"
+                className="h-11 justify-between font-normal sm:flex-1"
               >
                 <span
                   id={`${id}-value`}
