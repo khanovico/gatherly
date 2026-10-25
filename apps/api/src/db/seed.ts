@@ -101,7 +101,8 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
       startsAt,
       endsAt: new Date(+startsAt + when.hours * HOUR_MS),
       coverImage: `/images/covers/${fixture.category}-${cover}.webp`,
-      createdAt: new Date(Math.min(+now, +startsAt) - 21 * DAY_MS),
+      // Published 3–28 days before now (or before the start, for past events).
+      createdAt: new Date(Math.min(+now, +startsAt) - random.int(3, 28) * DAY_MS),
     };
     // The members whose preferences fit best take the seats.
     const attendeeIds = crowd
