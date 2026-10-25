@@ -1,2 +1,10 @@
 CLAUDE.local.md
 task.md
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
