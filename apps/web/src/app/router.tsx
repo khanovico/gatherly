@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import { AppShell } from '@/components/app-shell';
 import { ErrorBoundary } from '@/pages/error';
 
 /**
@@ -7,6 +8,7 @@ import { ErrorBoundary } from '@/pages/error';
  */
 export const router = createBrowserRouter([
   {
+    Component: AppShell,
     ErrorBoundary,
     children: [
       {
