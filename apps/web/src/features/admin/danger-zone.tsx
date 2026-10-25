@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { ConfirmDialog } from '@/features/admin/confirm-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { apiFetch } from '@/lib/api';
 
 const phrase = 'reset demo';

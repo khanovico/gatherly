@@ -1,60 +1,72 @@
-import { LoaderCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type ConfirmDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** Omit when the dialog is opened from elsewhere, e.g. a menu item. */
+  trigger?: ReactNode;
+  icon: LucideIcon;
   title: string;
   description: ReactNode;
   confirmLabel: string;
+  cancelLabel?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
-  /** Keeps the dialog open with a spinner until the action settles. */
-  pending?: boolean;
+  pending: boolean;
+  /** Extra gate, e.g. a typed confirmation phrase. */
+  canConfirm?: boolean;
+  children?: ReactNode;
 };
 
-/** Confirmation for a destructive action. */
+/** Destructive confirmation. Stays open while `pending`; the caller closes it on success. */
 export function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel,
-  onConfirm,
-  pending = false,
+  trigger,
+  icon: Icon,
+  cancelLabel = 'Go back',
+  canConfirm = true,
+  ...props
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
-      <DialogContent showCloseButton={!pending}>
-        <DialogHeader className="pr-6">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={pending}>
-              Go back
-            </Button>
-          </DialogClose>
-          <Button
-            className="bg-destructive hover:bg-destructive/90 text-white"
-            disabled={pending}
-            onClick={onConfirm}
+    <AlertDialog
+      open={props.open}
+      onOpenChange={(open) => !props.pending && props.onOpenChange(open)}
+    >
+      {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogMedia className="bg-destructive/10 text-destructive">
+            <Icon />
+          </AlertDialogMedia>
+          <AlertDialogTitle>{props.title}</AlertDialogTitle>
+          <AlertDialogDescription>{props.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {props.children}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={props.pending}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={!canConfirm || props.pending}
+            onClick={(e) => {
+              e.preventDefault();
+              props.onConfirm();
+            }}
           >
-            {pending && <LoaderCircle className="animate-spin" />}
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {props.pending ? 'Working…' : props.confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

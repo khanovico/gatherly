@@ -4,7 +4,7 @@ import { CalendarX } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/features/admin/confirm-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
