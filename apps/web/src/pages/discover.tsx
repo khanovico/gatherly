@@ -1,4 +1,12 @@
-import { CATEGORIES, SortOrder, type Category } from '@gatherly/shared';
+import {
+  CATEGORIES,
+  EventFormat,
+  NEIGHBORHOODS,
+  NeighborhoodId,
+  RadiusKm,
+  SortOrder,
+  type Category,
+} from '@gatherly/shared';
 import { ArrowUp, RotateCw, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -6,11 +14,13 @@ import { IllustratedState } from '@/components/illustrated-state';
 import { LoadMoreSentinel } from '@/components/load-more-sentinel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FilterPanel, type PlaceFilters } from '@/features/discover/filter-panel';
 import { SortSelect } from '@/features/discover/sort-select';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
 import { DateFilter } from '@/features/events/date-filter';
 import { categoryMeta, dateFilterBounds, type DateFilterValue } from '@/features/events/lib';
 import { useInfiniteEvents } from '@/features/events/queries';
+import { useProfile } from '@/features/profile/queries';
 import { useMe } from '@/hooks/use-me';
 import { cn } from '@/lib/utils';
 
@@ -25,8 +35,19 @@ export function Component() {
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
   };
+  const num = (key: string) => Number(params.get(key) || NaN) || undefined;
+  const place: PlaceFilters = {
+    format: EventFormat.safeParse(params.get('format')).data,
+    free: params.get('free') === '1' || undefined,
+    near: NeighborhoodId.safeParse(params.get('near')).data,
+    lat: num('lat'),
+    lng: num('lng'),
+    radius: RadiusKm.safeParse(num('radius')).data,
+  };
   const sort = SortOrder.safeParse(params.get('sort')).data;
   const { data: me } = useMe();
+  const { data: profile } = useProfile({ enabled: Boolean(me) });
+  const home = NEIGHBORHOODS.find((n) => n.id === profile?.neighborhood)?.name;
   const [text, setText] = useState(q);
   const [syncedQ, setSyncedQ] = useState(q);
   if (q !== syncedQ) {
@@ -47,13 +68,20 @@ export function Component() {
     category,
     ...dateFilterBounds(dates),
     sort,
+    format: place.format,
+    freeOnly: place.free,
+    near: place.near,
+    lat: place.lat,
+    lng: place.lng,
+    radiusKm: place.radius,
     pageSize: PAGE_SIZE,
   };
   const list = useInfiniteEvents(query);
   const { data, isPending, isError, isPlaceholderData, isFetchNextPageError } = list;
   const items = data?.pages.flatMap((page) => page.items) ?? [];
   const total = data?.pages[0]?.total ?? 0;
-  const filtered = Boolean(q || category || dates.when || dates.from);
+  const filtered =
+    Boolean(q || category || dates.when || dates.from) || Object.values(place).some(Boolean);
 
   /** Sets search params, or clears them when the value is empty. */
   const update = (changes: Record<string, string | undefined>, replace = false) =>
@@ -97,6 +125,7 @@ export function Component() {
             onChange={(next) => update({ when: next.when, from: next.from, to: next.to })}
             className="min-w-0 flex-1 sm:w-56"
           />
+          <FilterPanel value={place} home={home} onChange={update} />
           <SortSelect
             // The API ranks "For you" by default once a member has a profile.
             value={sort ?? (me && !me.onboardingPending ? 'for_you' : 'soonest')}
