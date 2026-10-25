@@ -2,7 +2,7 @@
 
 Gatherly is a community events platform for three kinds of user: organizers who create events, attendees who register, and administrators who run the platform. This page explains how the system is built and why.
 
-**Guiding tradeoff:** ship a working MVP fast, but make every shortcut deliberate, visible and documented with its upgrade path. Foundations that are expensive to retrofit (data integrity, authorization layers, telemetry, a payment-ready data model) are built or designed now. Everything else waits.
+**Guiding tradeoff:** ship a working MVP fast, but make every shortcut deliberate, visible and documented with its upgrade path. Foundations that are expensive to retrofit (data integrity, authorization layers, telemetry, a payment-ready data model, interaction logging for personalization) are built or designed now. Everything else waits.
 
 ## Decisions at a glance
 
@@ -11,10 +11,12 @@ Gatherly is a community events platform for three kinds of user: organizers who 
 | Language and stack | TypeScript end to end: Fastify, Zod, Drizzle, Postgres, React | One language and one set of schemas for API, web and later mobile | Node is not the fastest runtime for CPU-heavy work (we have none) | [0001](adr/0001-stack.md) |
 | Repository | pnpm workspace monorepo: `apps/api`, `apps/web`, `packages/shared` | API and clients change together; contracts cannot drift | One CI pipeline builds everything | [0002](adr/0002-monorepo.md) |
 | Hosting | One Replit Autoscale deployment (free tier); API serves the built SPA | Zero cost, live link, same origin (no CORS) | Cold starts, one environment, link renewal every 30 days | [0003](adr/0003-hosting.md) |
-| Authentication | Demo persona sign-in, server-side sessions, HttpOnly cookie | Reviewers try every role in one click; no password handling | Not real identity; replaced by OIDC before production | [0004](adr/0004-demo-auth.md) |
+| Authentication | Email and password sign-up (argon2id) plus one-click demo personas; server-side sessions, HttpOnly cookie | Real accounts that remember preferences, with no third party or paid developer program | We own password storage; no email verification or reset yet; OAuth later | [0004](adr/0004-demo-auth.md), [0008](adr/0008-password-signup.md) |
 | Authorization | Three layers: role, entitlement, ownership, enforced in API guards | Separates who you are, what you paid for, and what you own | Three checks to reason about instead of one role | [0005](adr/0005-authorization-model.md) |
 | Capacity | Atomic conditional update plus partial unique index, one transaction | No overbooking under concurrency, no extra infrastructure | One hot row per event limits peak throughput on mega-events | [0006](adr/0006-capacity-concurrency.md) |
 | Telemetry | OpenTelemetry direct to Grafana Cloud; errors to Sentry | Mature signals on free tiers, no collector to host | No tail sampling; exporter runs in the app process | [0007](adr/0007-telemetry.md) |
+| Ranking | Rule-based "For you" ranker behind a `Ranker` interface, versioned, with reasons per result | Works with no behavior data, explainable, testable; a model can replace it without contract changes | Hand-tuned weights until real data exists | [0009](adr/0009-rule-based-ranker.md) |
+| Interaction data | First-party, append-only interactions table (impressions to registrations) with ranker version and position | Lets us evaluate rankers offline and train models later | Personal data to protect; retention and consent rules apply | [0010](adr/0010-interaction-data.md) |
 
 ## 1. System context
 
@@ -30,7 +32,7 @@ flowchart LR
 
   grafana["Grafana Cloud<br/>traces, metrics, logs"]
   sentry["Sentry<br/>errors, web vitals"]
-  idp["Identity provider<br/>OIDC (later)"]
+  idp["OAuth providers<br/>Google, Apple, Facebook (later)"]
   stripe["Stripe<br/>Billing and Connect (later)"]
   email["Email provider<br/>confirmations, reminders (later)"]
 
@@ -153,12 +155,21 @@ erDiagram
   users ||--o{ events : "organizes"
   events ||--o{ registrations : "has"
   users ||--o{ registrations : "makes"
+  users ||--o| user_profiles : "has preferences"
+  users ||--o{ event_saves : "saves"
+  events ||--o{ event_saves : "saved in"
+  users ||--o{ event_hides : "hides"
+  events ||--o{ event_hides : "hidden in"
+  users ||--o{ interactions : "generates"
+  events ||--o{ interactions : "receives"
 
   users {
     uuid id PK
     text email UK
     text name
     text avatar_url
+    text bio
+    text password_hash "argon2id, null for demo personas"
     enum role "member or admin"
     enum status "active or suspended"
     timestamptz created_at
@@ -199,6 +210,11 @@ erDiagram
     int price_cents "0 in MVP"
     text currency
     enum status "published or cancelled"
+    float lat "null for online events"
+    float lng
+    text neighborhood
+    text_array tags
+    tsvector search "generated, weighted"
   }
   registrations {
     uuid id PK
@@ -208,6 +224,41 @@ erDiagram
     timestamptz hold_expires_at "paid checkout, later"
     timestamptz created_at
     timestamptz cancelled_at
+  }
+  user_profiles {
+    uuid user_id PK, FK
+    text_array interests "at least 3 categories"
+    text_array tags
+    text neighborhood
+    float home_lat "opt-in"
+    float home_lng
+    int radius_km "2, 5, 10 or 25"
+    text_array formats
+    text_array time_slots
+    timestamptz onboarded_at "null until onboarding"
+  }
+  event_saves {
+    uuid user_id PK, FK
+    uuid event_id PK, FK
+    timestamptz created_at
+  }
+  event_hides {
+    uuid user_id PK, FK
+    uuid event_id PK, FK
+    timestamptz created_at
+  }
+  interactions {
+    uuid id PK
+    uuid user_id FK "null when anonymous"
+    text anonymous_id "random first-party id"
+    uuid event_id FK
+    enum type "impression, click, view, save, unsave, hide, register, cancel"
+    text surface
+    int position
+    text query
+    text ranker_version
+    text request_id
+    timestamptz created_at
   }
 ```
 
@@ -221,8 +272,12 @@ Events also carry presentation fields (summary, description, venue, city, online
 | Times stored in UTC plus the event's IANA timezone | Correct ordering and filtering; the event's local time is shown even across DST changes | Two values to keep consistent; validated on write |
 | Registration status already includes `pending_payment` and `refunded` | Paid tickets later add states, not a migration of the core table | Two states unused in the MVP |
 | Plans hold an entitlement list | Changing what a plan grants is data, not code | Entitlements must be named and versioned carefully (they live in `packages/shared`) |
+| Preferences in `user_profiles`, apart from `users` | Identity stays small; preferences are private and change often | One more join for ranking |
+| Saves and hides as their own tables, keyed by user and event | Current state is one indexed lookup; idempotent put and delete | Their history lives in `interactions` instead |
+| Generated, weighted search column | Title weighs most, then tags, summary, description; always in sync with the row | Write cost on every event update |
+| Fixed neighborhood list with coordinates instead of a geocoding API | Zero cost, no third party, predictable demo (New York) | Only works for listed neighborhoods until geocoding arrives |
 
-Indexes: events by `(starts_at, status)` for discovery, events by `organizer_id` for dashboards, registrations by `user_id` for "my registrations", plus the partial unique index above.
+Indexes: events by `(starts_at, status)` for discovery, events by `organizer_id` for dashboards, registrations by `user_id` for "my registrations", plus the partial unique index above. Search uses a GIN index on the weighted search column and a trigram index on titles for typo tolerance. Interactions are indexed by user and time, and by event.
 
 ### Domain rules
 
@@ -237,7 +292,45 @@ Indexes: events by `(starts_at, status)` for discovery, events by `organizer_id`
 | Organizer registering for own event | Allowed | none |
 | Paid tickets | Price fields exist; any price above zero is rejected in the MVP | `PAID_TICKETS_UNAVAILABLE` |
 
-## 5. Access control
+## 5. Personalized discovery
+
+Discover ranks events for each person, explains why, and learns from what happens next. Rules now, models later; see [ADR 0009](adr/0009-rule-based-ranker.md) and the personalization stages in the [roadmap](roadmap.md).
+
+```mermaid
+flowchart TB
+  subgraph rank["Step 1: rank (per request)"]
+    direction LR
+    req["GET /events?sort=for_you<br/>or /discover/home"] --> ctx["Viewer context<br/>profile, saves, hides,<br/>registrations"]
+    ctx --> cand["Candidates<br/>upcoming, published, nearby<br/>or online, matching filters"]
+    cand --> filt["Hard filters<br/>drop past, full, cancelled,<br/>registered, own, hidden"]
+    filt --> score["Score (rules-v1)<br/>interests, tags, distance,<br/>time fit, popularity, recency"]
+  end
+  subgraph shape["Step 2: shape the response"]
+    direction LR
+    div["Diversity rerank<br/>at most 2 per category<br/>in top 8"] --> why["Reasons and distance<br/>Because you like Tech,<br/>2.1 km away"]
+    why --> resp["Response<br/>events, reasons,<br/>rankerVersion, requestId"]
+  end
+  subgraph learn["Step 3: log what happened"]
+    direction LR
+    web["Web renders cards"] --> log["POST /interactions<br/>impressions (cards seen, batched),<br/>clicks, saves, hides, registrations"]
+    log --> store[("interactions<br/>with surface, position,<br/>ranker version")]
+    store -.-> train["Offline evaluation<br/>and training (later)"]
+  end
+  rank --> shape --> learn
+```
+
+| Piece | Design | Why |
+|---|---|---|
+| Profile and onboarding | Three skippable steps after sign-up: interests, neighborhood and travel radius, formats and time slots | Gives the ranker useful signals on day one instead of waiting for behavior |
+| Location | Fixed list of New York neighborhoods with coordinates, or a location the user chooses to share; online events have none | No geocoding service, no background tracking |
+| Search | Postgres full-text search with weights, trigram matching for typos, filters for category, tags, format, distance, dates and free events | Good relevance without a search cluster |
+| Sort options | For you (default when signed in and onboarded), soonest, nearest, popular | Personalization never hides the plain orders people expect |
+| Home rails | "For you", "Near you this weekend", "Popular now"; anonymous visitors get popular and, if shared, nearby | One request fills the landing and Discover pages |
+| Save and not interested | Heart and hide on every card; hidden events never come back; saved events on the profile | Explicit feedback is the strongest signal we can get |
+| Real numbers | Seat counts, attendee lists and popularity come from real rows, including the seeded community | What the ranker sees is what users see |
+| Logging | Every ranked response has a ranker version and request ID; impressions and outcomes are logged against them | Rankers can be compared offline and swapped safely; see [ADR 0010](adr/0010-interaction-data.md) |
+
+## 6. Access control
 
 Three independent layers answer three different questions. All are enforced in API guards; the web app reads the same data (`/me` returns role, plan and entitlements) only to shape the UI.
 
@@ -274,6 +367,10 @@ Demo personas: **Alex** is an attendee (member, Free plan), **Olivia** an organi
 | Browse and search events, view details | Yes | Yes | Yes | Yes | Yes |
 | Register for or cancel own registration | 401 | Yes | Yes | Yes | Yes |
 | View my registrations | 401 | Yes | Yes | Yes | Yes |
+| Sign up or sign in with email and password | Yes | n/a | n/a | n/a | n/a |
+| Edit own profile and preferences; save or hide events | 401 | Yes | Yes | Yes | Yes |
+| View a public profile; get the Discover home rails | Yes | Yes | Yes | Yes | Yes |
+| Record interactions (impressions, clicks) | Yes, under an anonymous ID | Yes | Yes | Yes | Yes |
 | Create an event | 401 | 403 `ENTITLEMENT_REQUIRED` (paywall) | Yes | Yes | Yes (override) |
 | Edit or cancel an event | 401 | 403 | 403 unless owner | Yes | Yes |
 | View attendees, remove an attendee | 401 | 403 | 403 unless owner | Yes | Yes |
@@ -284,22 +381,22 @@ Demo personas: **Alex** is an attendee (member, Free plan), **Olivia** an organi
 
 A suspended user is blocked from everything except signing out (403 `ACCOUNT_SUSPENDED`). Because the demo has no passwords and anyone can act as Admin, the seeded personas are protected: they cannot be suspended, demoted or downgraded (409 `PROTECTED_DEMO_ACCOUNT`), the last admin cannot be demoted, and an admin-only **Reset demo data** action restores the seed.
 
-## 6. MVP versus later
+## 7. MVP versus later
 
 | Area | In the MVP | Later | Why it waits |
 |---|---|---|---|
 | Core workflow | Create event, register, capacity limit, cancel, race-safe | Waitlist with automatic promotion | Waitlist is a product decision (auto-promote or offer with expiry) worth validating first |
-| Identity | Demo persona sign-in, server-side sessions | OIDC provider (Auth0, Clerk or Cognito), MFA for admins | Real identity is undifferentiated work; the session and guard layer stays the same |
+| Identity | Email and password sign-up and sign-in, demo personas, server-side sessions | OAuth (Google, Apple, Facebook), email verification, password reset, MFA for admins | Providers need registrations and a stable domain; the session and guard layer stays the same |
 | Authorization | Role, entitlement and ownership guards | Organizations with team roles (co-organizers); policy engine if rules multiply | No team use case yet; a policy engine is overhead for a dozen rules |
 | Monetization | Pricing page, plan badge, paywall, admin plan grant, payment-ready schema | Stripe Billing subscriptions, paid tickets on Stripe Connect | Real money needs legal, tax and refund policy decisions first. See [monetization](monetization.md) |
 | Notifications | None (in-app state only) | Email confirmations and reminders through an outbox; push on mobile | Needs a job runner and a provider; not needed to prove the workflow |
-| Discovery | Text search, category and date filters, pagination | Full-text and geo search, recommendations | Postgres covers MVP volume |
+| Discovery | Weighted full-text and typo-tolerant search, distance filter, rule-based "For you" ranking with reasons, saves and hides | Learning-to-rank, embeddings, social signals, experiments (roadmap stages) | No behavior data to learn from yet; rules are explainable |
 | Media | Seeded images shipped with the app | Uploads to object storage behind a CDN, with resizing | Upload handling adds moderation and abuse surface |
-| Clients | Responsive, mobile-first web | iOS and Android apps (section 10) | The API and shared schemas are already client-agnostic |
+| Clients | Responsive, mobile-first web | iOS and Android apps (section 11) | The API and shared schemas are already client-agnostic |
 | Observability | Traces, logs, metrics, errors, dashboard, health endpoints | Collector with tail sampling, SLOs and alerts, real user monitoring | Free tiers and one service do not need a collector yet |
 | Environments | One live deployment, local Docker Postgres, CI | Staging and production, backups with point-in-time recovery | Zero cost was a hard constraint |
 
-## 7. Scaling considerations
+## 8. Scaling considerations
 
 The MVP is sized for a demo, but nothing in it blocks growth. Each pressure point has a known next step and a signal that says when to take it.
 
@@ -310,24 +407,25 @@ The MVP is sized for a demo, but nothing in it blocks growth. Each pressure poin
 | Discovery reads | Indexed, paginated queries | HTTP caching of public lists at a CDN, then read replicas | Read latency or database CPU climbs |
 | Hot event (thousands try to register at once) | Row lock held for one short transaction | Virtual waiting room or queue in front of registration; split seat inventory | Lock wait time on one event row |
 | Background work | None | Job queue for email, reminders, hold expiry and webhooks, with a transactional outbox | First feature that sends email or takes payment |
-| Search | `ILIKE` with filters | Postgres full-text or trigram, then a search engine; PostGIS for "near me" | Search latency or relevance complaints |
+| Search and ranking | Postgres full-text and trigram indexes; ranking over a bounded candidate set in the API | Search engine; PostGIS for geo candidates; precomputed features | Search latency, catalog beyond one city |
+| Interaction writes | Batched impressions into one append-only table | Monthly partitions, then export to a warehouse | Table size slows inserts or analysis |
 | Media | Static files in the app | Object storage plus CDN plus image resizing | User uploads |
 | Telemetry volume | 100 percent sampling, direct export | Collector with tail sampling | Free-tier limits or cost |
 
-## 8. Security considerations
+## 9. Security considerations
 
 | Concern | MVP | Before production |
 |---|---|---|
-| Authentication | Server-side sessions (revocable), HttpOnly, Secure, SameSite=Lax cookie | OIDC provider, MFA for admins, session rotation on privilege change |
+| Authentication | Server-side sessions (revocable), HttpOnly, Secure, SameSite=Lax cookie; argon2id password hashes; rate-limited sign-in with one generic error | OAuth or hosted identity, email verification, breached-password screening, MFA for admins, session rotation on privilege change |
 | Authorization | Every rule enforced in API guards; UI only mirrors | Audit log of admin actions; organization-scoped roles |
 | Input validation | Zod schemas at the API boundary; Drizzle parameterized SQL | Same, plus payload size limits per route |
 | Cross-site requests | Same-origin SPA, SameSite=Lax cookie, JSON-only API | CSRF token if any cross-site form or embed appears |
 | Secrets | Replit Secrets and local `.env` (never committed); config validated at startup | Secret manager with rotation |
-| Personal data | Email redacted from logs; minimal fields stored | Data export and deletion on request; retention policy |
+| Personal data | Email redacted from logs; preferences private; interactions hold IDs only; location opt-in and coarse | Notice and choice for personalization, data export and deletion, enforced retention ([ADR 0010](adr/0010-interaction-data.md)) |
 | Abuse | Protected demo personas, demo reset | Rate limits on sign-in and registration, bot protection on high-demand events |
 | Supply chain | Lockfile, CI on every pull request | Dependency and secret scanning, security headers |
 
-## 9. Third-party integrations
+## 10. Third-party integrations
 
 Every external service sits behind a small interface owned by Gatherly, so it can be mocked in tests and replaced without touching domain code. The MVP already does this for payments: checkout goes through a payment provider interface whose mock returns `COMING_SOON`.
 
@@ -335,7 +433,7 @@ Every external service sits behind a small interface owned by Gatherly, so it ca
 |---|---|---|---|
 | Grafana Cloud | Traces, logs, metrics, dashboard | Built | Keep metric labels low-cardinality on the free tier |
 | Sentry | Errors and performance, web and API, linked to traces | Built | Report server errors, not expected domain rejections |
-| Identity provider (OIDC) | Real sign-in, social login, MFA | Designed | Map provider identity to a Gatherly user, then reuse the existing session |
+| OAuth providers (Google, Apple, Facebook) | Social sign-in | Designed (buttons show "coming soon") | Link to the existing account by verified email, then reuse the existing session |
 | Stripe Billing | Organizer subscriptions | Designed | Webhooks drive entitlements; never trust the client |
 | Stripe Connect | Paid tickets and organizer payouts | Designed | Verified, idempotent webhooks and a ledger. See [monetization](monetization.md) |
 | Email provider | Confirmations, reminders, cancellations | Later | Sent from an outbox so a provider outage never fails a registration |
@@ -344,7 +442,7 @@ Every external service sits behind a small interface owned by Gatherly, so it ca
 
 Inbound webhooks (Stripe, email events) follow one pattern: verify the signature, store the event by its provider ID to drop duplicates, process it in a transaction, respond quickly.
 
-## 10. Mobile approach
+## 11. Mobile approach
 
 The brief targets web, iOS and Android. The MVP ships a responsive, mobile-first web app; the architecture is ready for native apps without backend changes.
 
