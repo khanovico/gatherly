@@ -1,10 +1,11 @@
+import { NEIGHBORHOODS } from '@gatherly/shared';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import type { Persona } from '@gatherly/shared';
 import { PERSONAS, ensurePersonas } from './personas';
 import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
 import { DEMO_EVENTS } from './seed-data';
-import { PERSONA_PROFILES, generateMembers } from './seed-members';
+import { HOSTS, PERSONA_PROFILES, generateMembers } from './seed-members';
 import { createRandom } from './seed-random';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -14,6 +15,7 @@ const DAY_MS = 24 * HOUR_MS;
 // Serializes resets across app instances booting at the same time.
 const SEED_LOCK = 802_611;
 const MEMBER_COUNT = 200;
+const TIMEZONE = 'America/New_York';
 
 /** "Tomás Rivera" → "tomas.rivera@gatherly.demo" */
 const memberEmail = (name: string) =>
@@ -65,11 +67,13 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     );
   await resetPersonaProfiles(tx, now);
   const [premium] = await tx.select({ id: plans.id }).from(plans).where(eq(plans.code, 'premium'));
-  const organizers = new Set(DEMO_EVENTS.map((e) => e.organizer));
-  const organizerPlans = members
-    .filter((m) => organizers.has(m.name))
-    .map((m) => ({ userId: m.id, planId: premium!.id, provider: 'mock' as const }));
-  if (organizerPlans.length) await tx.insert(subscriptions).values(organizerPlans);
+  await tx
+    .insert(subscriptions)
+    .values(
+      members
+        .filter((m) => HOSTS.includes(m.name))
+        .map((m) => ({ userId: m.id, planId: premium!.id, provider: 'mock' as const })),
+    );
 
   const personas = await tx
     .select({ id: users.id, name: users.name })
@@ -78,7 +82,10 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
   const idOf = new Map([...members, ...personas].map((u) => [u.name, u.id]));
 
   for (const [i, { when, cover, going, alex, organizer, ...event }] of DEMO_EVENTS.entries()) {
-    const startsAt = localTime(now, when.days, when.at, event.timezone);
+    const startsAt = localTime(now, when.days, when.at, TIMEZONE);
+    const hood = NEIGHBORHOODS.find((n) => n.id === event.neighborhood);
+    // Venues sit within ~500 m of their neighborhood's center.
+    const jitter = () => (random.next() - 0.5) * 0.01;
     const createdAt = new Date(Math.min(+now, +startsAt) - 21 * DAY_MS);
     // Rotate through the members so each event draws a different crowd.
     const shift = (i * 3) % members.length;
@@ -89,6 +96,10 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
       .insert(events)
       .values({
         ...event,
+        timezone: TIMEZONE,
+        city: hood && (hood.borough === 'Manhattan' ? 'New York' : hood.borough),
+        lat: hood && hood.lat + jitter(),
+        lng: hood && hood.lng + jitter(),
         organizerId: idOf.get(organizer ?? PERSONAS.organizer.name)!,
         startsAt,
         endsAt: new Date(+startsAt + when.hours * HOUR_MS),
