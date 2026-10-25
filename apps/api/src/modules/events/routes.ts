@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { events, registrations, users } from '../../db/schema';
 import type { AuthUser } from '../../lib/auth';
 import { AppError } from '../../lib/errors';
+import { businessMetrics } from '../../lib/metrics';
 import { assertOwnerOrAdmin, requireEntitlement, requireUser } from '../../lib/guards';
 
 type EventRow = typeof events.$inferSelect;
@@ -134,6 +135,7 @@ const eventsRoutes: FastifyPluginAsyncZod = async (app) => {
         .insert(events)
         .values({ ...toColumns(request.body), organizerId: user.id })
         .returning();
+      businessMetrics.eventCreated();
       return reply.status(201).send(await loadDetail(event!, user));
     },
   );

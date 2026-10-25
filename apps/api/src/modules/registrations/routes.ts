@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { events, registrations } from '../../db/schema';
 import { AppError } from '../../lib/errors';
 import { requireUser } from '../../lib/guards';
+import { businessMetrics } from '../../lib/metrics';
 import { ACTIVE_STATUSES, releaseSeat, takeSeat, toEventSummary, toRegistration } from './seats';
 
 const eventParams = z.object({ id: z.uuid() });
@@ -15,7 +16,11 @@ const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
     { schema: { params: eventParams, response: { 201: registration } } },
     async (request, reply) => {
       const user = requireUser(request);
-      const row = await takeSeat(app.db, request.params.id, user.id);
+      const row = await takeSeat(app.db, request.params.id, user.id).catch((err: unknown) => {
+        businessMetrics.registration(err instanceof AppError ? err.code : 'INTERNAL');
+        throw err;
+      });
+      businessMetrics.registration('confirmed');
       return reply.status(201).send(toRegistration(row));
     },
   );
@@ -35,6 +40,7 @@ const registrationsRoutes: FastifyPluginAsyncZod = async (app) => {
         if (startsAt <= new Date()) throw new AppError('EVENT_STARTED', 409);
         return registration;
       });
+      businessMetrics.cancellation();
       return toRegistration(row);
     },
   );
