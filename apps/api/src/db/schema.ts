@@ -2,22 +2,31 @@ import {
   CATEGORIES,
   EventFormat,
   EventStatus,
+  InteractionType,
   PlanCode,
   RegistrationStatus,
   Role,
   UserStatus,
   plan,
   subscription,
+  type Category,
   type Entitlement,
+  type NeighborhoodId,
+  type Surface,
+  type TimeSlot,
 } from '@gatherly/shared';
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
+  customType,
+  doublePrecision,
   index,
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -27,6 +36,12 @@ import {
 const timestamptz = () => timestamp({ withTimezone: true });
 const id = () => uuid().primaryKey().defaultRandom();
 const createdAt = () => timestamptz().notNull().defaultNow();
+const updatedAt = () =>
+  timestamptz()
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
 
 export const roleEnum = pgEnum('role', Role.enum);
 export const userStatusEnum = pgEnum('user_status', UserStatus.enum);
@@ -41,12 +56,16 @@ export const categoryEnum = pgEnum('category', CATEGORIES);
 export const eventFormatEnum = pgEnum('event_format', EventFormat.enum);
 export const eventStatusEnum = pgEnum('event_status', EventStatus.enum);
 export const registrationStatusEnum = pgEnum('registration_status', RegistrationStatus.enum);
+export const interactionTypeEnum = pgEnum('interaction_type', InteractionType.enum);
 
 export const users = pgTable('users', {
   id: id(),
   email: text().notNull().unique(),
   name: text().notNull(),
   avatarUrl: text(),
+  /** argon2id; null for accounts that cannot sign in with a password (demo personas). */
+  passwordHash: text(),
+  bio: text(),
   role: roleEnum().notNull().default('member'),
   status: userStatusEnum().notNull().default('active'),
   /** Seeded demo personas: cannot be suspended, demoted or downgraded. */
@@ -118,15 +137,24 @@ export const events = pgTable(
     currency: text().notNull().default('USD'),
     status: eventStatusEnum().notNull().default('published'),
     coverImage: text().notNull(),
+    /** Null for online events. */
+    lat: doublePrecision(),
+    lng: doublePrecision(),
+    neighborhood: text().$type<NeighborhoodId>(),
+    tags: text().array().notNull().default([]),
+    /** Weighted full-text document. `gatherly_tags_text` is created by the migration. */
+    search: tsvector().generatedAlwaysAs(
+      sql`setweight(to_tsvector('english', "title"), 'A') || setweight(to_tsvector('english', gatherly_tags_text("tags")), 'B') || setweight(to_tsvector('english', "summary"), 'C') || setweight(to_tsvector('english', "description"), 'D')`,
+    ),
     createdAt: createdAt(),
-    updatedAt: timestamptz()
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
+    updatedAt: updatedAt(),
   },
   (t) => [
     index('events_starts_at_status_idx').on(t.startsAt, t.status),
     index('events_organizer_id_idx').on(t.organizerId),
+    index('events_search_idx').using('gin', t.search),
+    // Typo-tolerant title matching (pg_trgm, enabled by the migration).
+    index('events_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
     // Last line of defence against overbooking if a code path ever skips the conditional update.
     check(
       'events_registered_count_within_capacity',
@@ -156,5 +184,72 @@ export const registrations = pgTable(
     uniqueIndex('registrations_active_event_user_idx')
       .on(t.eventId, t.userId)
       .where(sql`${t.status} in ('pending_payment', 'confirmed')`),
+  ],
+);
+
+export const userProfiles = pgTable('user_profiles', {
+  userId: uuid()
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  interests: categoryEnum().array().$type<Category[]>().notNull().default([]),
+  tags: text().array().notNull().default([]),
+  neighborhood: text().$type<NeighborhoodId>(),
+  homeLat: doublePrecision(),
+  homeLng: doublePrecision(),
+  radiusKm: integer().notNull().default(10),
+  formats: text().array().$type<EventFormat[]>().notNull().default(['in_person', 'online']),
+  timeSlots: text()
+    .array()
+    .$type<TimeSlot[]>()
+    .notNull()
+    .default(['weekday_daytime', 'weeknights', 'weekends']),
+  onboardedAt: timestamptz(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+const eventMark = (name: string) =>
+  pgTable(
+    name,
+    {
+      userId: uuid()
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+      eventId: uuid()
+        .notNull()
+        .references(() => events.id, { onDelete: 'cascade' }),
+      createdAt: createdAt(),
+    },
+    (t) => [
+      primaryKey({ columns: [t.userId, t.eventId] }),
+      index(`${name}_event_id_idx`).on(t.eventId),
+    ],
+  );
+export const eventSaves = eventMark('event_saves');
+export const eventHides = eventMark('event_hides');
+
+/** Append-only behaviour log for ranking and future models. No PII beyond ids. */
+export const interactions = pgTable(
+  'interactions',
+  {
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: uuid().references(() => users.id, { onDelete: 'cascade' }),
+    /** Device id for signed-out visitors. */
+    anonymousId: uuid(),
+    eventId: uuid()
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    type: interactionTypeEnum().notNull(),
+    surface: text().$type<Surface>().notNull(),
+    position: integer(),
+    query: text(),
+    rankerVersion: text(),
+    requestId: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('interactions_user_id_created_at_idx').on(t.userId, t.createdAt),
+    index('interactions_event_id_idx').on(t.eventId),
+    check('interactions_actor', sql`${t.userId} is not null or ${t.anonymousId} is not null`),
   ],
 );
