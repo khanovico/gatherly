@@ -4,10 +4,11 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 /** The signed-in user's private preferences (defaults until onboarding is done). */
-export function useProfile() {
+export function useProfile({ enabled = true } = {}) {
   return useQuery({
     queryKey: queryKeys.my.profile,
     queryFn: () => apiFetch<Profile>('/me/profile'),
+    enabled,
   });
 }
 
