@@ -15,7 +15,7 @@ A versioned JSON REST API. The live, always-current contract is the OpenAPI docu
 | Pagination | `page` and `pageSize` query parameters; responses return `items`, `page`, `pageSize`, `total` | Simple, predictable; cursor pagination can come later for feeds |
 | Time | ISO 8601 in UTC; events also carry an IANA `timezone` | Correct ordering everywhere; local display at the venue |
 | Money | Integer minor units (`priceCents`) plus `currency` | No floating-point rounding |
-| Tracing | Accepts W3C `traceparent` | Browser and API spans join one trace |
+| Tracing | Accepts W3C `traceparent`; every response carries `x-trace-id` | Browser and API spans join one trace; any response can be looked up in Grafana or Sentry |
 | Ranked results | Personalized responses carry `rankerVersion` and a request ID; event summaries carry `reasons[]` and, when location is known, `distanceKm` | Clients show why an event is suggested; impressions can be tied to the ranking that produced them |
 
 ## Endpoints
@@ -94,6 +94,7 @@ Access column: **public** needs nothing; **session** needs any signed-in, non-su
 | PATCH | `/admin/users/:id` | admin | Change status (suspend), role or plan | `PROTECTED_DEMO_ACCOUNT`, `NOT_FOUND` |
 | GET | `/admin/events` | admin | All events, including cancelled | `FORBIDDEN` |
 | POST | `/admin/demo/reset` | admin | Restore the demo seed data | `FORBIDDEN` |
+| POST | `/admin/diagnostics/error` | admin | Send a test error to Sentry; answers 500 with `traceId` and `sentryEventId`. One per 10 seconds | `RATE_LIMITED`, `FORBIDDEN` |
 
 ### Billing
 
@@ -109,7 +110,7 @@ Access column: **public** needs nothing; **session** needs any signed-in, non-su
 |---|---|---|---|
 | GET | `/healthz` | public | Liveness: the process is up |
 | GET | `/readyz` | public | Readiness: the database answers |
-| GET | `/version` | public | Git SHA and build time |
+| GET | `/version` | public | Git SHA, build time and uptime |
 
 ## Error codes
 
@@ -135,6 +136,7 @@ Every error response carries one of these stable codes. Clients and tests branch
 | `PAID_TICKETS_UNAVAILABLE` | 422 | Event price above zero in the MVP | Keep the price at zero |
 | `RATE_LIMITED` | 429 | Too many sign-in attempts | Wait and retry; honor the `Retry-After` header when present |
 | `COMING_SOON` | 501 | Feature designed but not built (checkout) | Show a "coming soon" dialog |
+| `RATE_LIMITED` | 429 | Too many attempts in a short window (for example the diagnostics error, one per 10 seconds) | Wait and retry |
 | `INTERNAL` | 500 | Unexpected failure; reported to Sentry with a trace ID | Show a retry option; quote the trace ID to support |
 
 **Status choices.** 400 means the request is malformed; 422 means it is well formed but asks for something the MVP will not do. 409 means the request is valid but conflicts with the current state of a resource (capacity, timing, uniqueness), so retrying unchanged will not help until that state changes. Ownership failures return 403 rather than 404 because events are public anyway; hiding their existence gains nothing. Wrong email and wrong password share one 401 so sign-in does not reveal who has an account; sign-up's 409 `EMAIL_TAKEN` does, a tradeoff accepted until email verification exists ([ADR 0008](adr/0008-password-signup.md)).
