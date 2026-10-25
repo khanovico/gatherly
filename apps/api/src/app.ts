@@ -6,6 +6,7 @@ import {
 } from 'fastify-type-provider-zod';
 import { config } from './config';
 import { createDb, type Db } from './db/client';
+import { registerAuth } from './lib/auth';
 import { registerApiNotFound, registerErrorHandling } from './lib/errors';
 import adminRoutes from './modules/admin/routes';
 import authRoutes from './modules/auth/routes';
@@ -45,6 +46,7 @@ export async function buildApp(opts: { db?: Db } = {}) {
   await app.register(
     async (api) => {
       registerApiNotFound(api);
+      await registerAuth(api);
       for (const routes of modules) await api.register(routes);
     },
     { prefix: '/api/v1' },
