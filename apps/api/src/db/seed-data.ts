@@ -13,8 +13,8 @@ type DemoEvent = Pick<
   | 'onlineUrl'
   | 'capacity'
   | 'status'
-  | 'tags'
 > & {
+  tags: string[];
   /** In-person only: venue coordinates and city derive from it. */
   neighborhood?: NeighborhoodId;
   /** Relative to the seed run: `days` from today at local time `at` in New York. */

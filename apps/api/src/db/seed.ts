@@ -6,6 +6,7 @@ import { PERSONAS, ensurePersonas } from './personas';
 import { events, plans, registrations, subscriptions, userProfiles, users } from './schema';
 import { DEMO_EVENTS } from './seed-data';
 import { HOSTS, PERSONA_PROFILES, generateMembers } from './seed-members';
+import { affinity } from './seed-affinity';
 import { createRandom } from './seed-random';
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
@@ -81,42 +82,50 @@ const insertDemoContent = async (tx: Tx, now: Date) => {
     .where(eq(users.isProtected, true));
   const idOf = new Map([...members, ...personas].map((u) => [u.name, u.id]));
 
-  for (const [i, { when, cover, going, alex, organizer, ...event }] of DEMO_EVENTS.entries()) {
+  const crowd = members.map((m, i) => ({ id: m.id, profile: seeds[i]!.profile }));
+  const planned = DEMO_EVENTS.map(({ when, cover, going, alex, organizer, ...fixture }) => {
     const startsAt = localTime(now, when.days, when.at, TIMEZONE);
-    const hood = NEIGHBORHOODS.find((n) => n.id === event.neighborhood);
+    const hood = NEIGHBORHOODS.find((n) => n.id === fixture.neighborhood);
     // Venues sit within ~500 m of their neighborhood's center.
     const jitter = () => (random.next() - 0.5) * 0.01;
-    const createdAt = new Date(Math.min(+now, +startsAt) - 21 * DAY_MS);
-    // Rotate through the members so each event draws a different crowd.
-    const shift = (i * 3) % members.length;
-    const crowd = [...members.slice(shift), ...members.slice(0, shift)].slice(0, going);
-    const attendeeIds = crowd.map((m) => m.id);
-    if (alex) attendeeIds.unshift(idOf.get(PERSONAS.attendee.name)!);
-    const [row] = await tx
-      .insert(events)
-      .values({
-        ...event,
-        timezone: TIMEZONE,
-        city: hood && (hood.borough === 'Manhattan' ? 'New York' : hood.borough),
-        lat: hood && hood.lat + jitter(),
-        lng: hood && hood.lng + jitter(),
-        organizerId: idOf.get(organizer ?? PERSONAS.organizer.name)!,
-        startsAt,
-        endsAt: new Date(+startsAt + when.hours * HOUR_MS),
-        registeredCount: attendeeIds.length,
-        coverImage: `/images/covers/${event.category}-${cover}.webp`,
-        createdAt,
-      })
-      .returning({ id: events.id });
-    if (!attendeeIds.length) continue;
-    await tx.insert(registrations).values(
-      attendeeIds.map((userId, j) => ({
-        eventId: row!.id,
+    const event = {
+      ...fixture,
+      timezone: TIMEZONE,
+      city: hood && (hood.borough === 'Manhattan' ? 'New York' : hood.borough),
+      lat: hood ? hood.lat + jitter() : null,
+      lng: hood ? hood.lng + jitter() : null,
+      organizerId: idOf.get(organizer ?? PERSONAS.organizer.name)!,
+      startsAt,
+      endsAt: new Date(+startsAt + when.hours * HOUR_MS),
+      coverImage: `/images/covers/${fixture.category}-${cover}.webp`,
+      createdAt: new Date(Math.min(+now, +startsAt) - 21 * DAY_MS),
+    };
+    // The members whose preferences fit best take the seats.
+    const attendeeIds = crowd
+      .filter((m) => m.id !== event.organizerId)
+      .map((m) => ({ id: m.id, score: affinity(m.profile, event, random) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, going)
+      .map((m) => m.id);
+    if (alex) attendeeIds.push(idOf.get(PERSONAS.attendee.name)!);
+    return { event: { ...event, registeredCount: attendeeIds.length }, attendeeIds };
+  });
+
+  const rows = await tx
+    .insert(events)
+    .values(planned.map((p) => p.event))
+    .returning({ id: events.id });
+  await tx.insert(registrations).values(
+    planned.flatMap(({ event, attendeeIds }, i) => {
+      // Sign-ups spread from publication until now, or until the start for past events.
+      const window = Math.min(+now, +event.startsAt) - +event.createdAt;
+      return attendeeIds.map((userId) => ({
+        eventId: rows[i]!.id,
         userId,
-        createdAt: new Date(+createdAt + (j + 1) * 7 * HOUR_MS),
-      })),
-    );
-  }
+        createdAt: new Date(+event.createdAt + random.next() * window),
+      }));
+    }),
+  );
 };
 
 /** Wipes every event and non-persona user, then reseeds with dates relative to now. */

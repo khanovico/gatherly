@@ -9,9 +9,11 @@ import {
 import type { Random } from './seed-random';
 import type { userProfiles, users } from './schema';
 
-type Profile = Omit<typeof userProfiles.$inferInsert, 'userId' | 'createdAt' | 'updatedAt'> & {
-  interests: Category[];
-};
+type ProfileRow = typeof userProfiles.$inferInsert;
+type Profile = Omit<ProfileRow, 'userId' | 'createdAt' | 'updatedAt'> &
+  Required<Pick<ProfileRow, 'tags' | 'radiusKm' | 'formats' | 'timeSlots'>> & {
+    interests: Category[];
+  };
 export type SeedMember = Pick<typeof users.$inferInsert, 'name' | 'bio' | 'createdAt'> & {
   /** Null: signed up but never opened onboarding, so the API serves profile defaults. */
   profile: Profile | null;
