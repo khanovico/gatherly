@@ -1,4 +1,5 @@
 import type { Category, EventSummary } from '@gatherly/shared';
+import { addDays, isValid, parseISO, startOfDay } from 'date-fns';
 import {
   Briefcase,
   Code2,
@@ -46,4 +47,30 @@ export function seatsLabel(seats: Seats) {
 export function eventLocation(event: Pick<EventSummary, 'format' | 'venueName' | 'city'>) {
   if (event.format === 'online') return 'Online';
   return [event.venueName, event.city].filter(Boolean).join(' · ');
+}
+
+/** Date filter as kept in the URL: a preset, or a custom `from`–`to` range of `yyyy-MM-dd` days. */
+export type DateFilterValue = { when?: 'weekend' | 'week'; from?: string; to?: string };
+
+/**
+ * API `from`/`to` bounds for a date filter, in the viewer's calendar. Rounded to midnight so query
+ * keys stay stable; a range starting today leaves `from` to the API (now).
+ */
+export function dateFilterBounds({ when, from, to }: DateFilterValue) {
+  const today = startOfDay(new Date());
+  const iso = (day: Date) => day.toISOString();
+  if (from) {
+    const start = parseISO(from);
+    const end = addDays(parseISO(to ?? from), 1);
+    if (!isValid(start) || !isValid(end)) return {};
+    return { from: start > today ? iso(start) : undefined, to: iso(end) };
+  }
+  if (when === 'week') return { to: iso(addDays(today, 7)) };
+  if (when !== 'weekend') return {};
+  const dow = today.getDay();
+  const toSaturday = dow === 0 ? -1 : 6 - dow; // Saturday 00:00 → Monday 00:00; mid-weekend: from now
+  return {
+    from: toSaturday > 0 ? iso(addDays(today, toSaturday)) : undefined,
+    to: iso(addDays(today, toSaturday + 2)),
+  };
 }

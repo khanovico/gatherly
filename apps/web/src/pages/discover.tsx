@@ -14,34 +14,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { EventCard, EventCardSkeleton } from '@/features/events/event-card';
-import { categoryMeta } from '@/features/events/lib';
+import { categoryMeta, dateFilterBounds, type DateFilterValue } from '@/features/events/lib';
 import { useInfiniteEvents } from '@/features/events/queries';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 12;
 const whenLabels = { any: 'Any date', weekend: 'This weekend', week: 'Next 7 days' };
-type When = keyof typeof whenLabels;
-
-/** Start/end bounds in the viewer's calendar, rounded to midnight so query keys stay stable. */
-function dateRange(when: When): { from?: string; to?: string } {
-  if (when === 'any') return {};
-  const shift = (days: number) => {
-    const day = new Date();
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() + days);
-    return day.toISOString();
-  };
-  if (when === 'week') return { to: shift(7) };
-  const dow = new Date().getDay();
-  const toSaturday = dow === 0 ? -1 : 6 - dow; // Saturday 00:00 → Monday 00:00; mid-weekend: from now
-  return { from: toSaturday > 0 ? shift(toSaturday) : undefined, to: shift(toSaturday + 2) };
-}
 
 export function Component() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
   const category = CATEGORIES.find((c) => c === params.get('category'));
-  const when = (Object.keys(whenLabels) as When[]).find((w) => w === params.get('when')) ?? 'any';
+  const dates: DateFilterValue = {
+    when: (['weekend', 'week'] as const).find((w) => w === params.get('when')),
+    from: params.get('from') ?? undefined,
+    to: params.get('to') ?? undefined,
+  };
   const [text, setText] = useState(q);
   const [syncedQ, setSyncedQ] = useState(q);
   if (q !== syncedQ) {
@@ -57,12 +45,12 @@ export function Component() {
     chips.current?.scrollTo({ left: (active?.offsetLeft ?? 0) - 16, behavior: 'smooth' });
   }, [category]);
 
-  const query = { q: q || undefined, category, ...dateRange(when), pageSize: PAGE_SIZE };
+  const query = { q: q || undefined, category, ...dateFilterBounds(dates), pageSize: PAGE_SIZE };
   const list = useInfiniteEvents(query);
   const { data, isPending, isError, isPlaceholderData, isFetchNextPageError } = list;
   const items = data?.pages.flatMap((page) => page.items) ?? [];
   const total = data?.pages[0]?.total ?? 0;
-  const filtered = Boolean(q || category || when !== 'any');
+  const filtered = Boolean(q || category || dates.when || dates.from);
 
   /** Sets search params, or clears them when the value is empty. */
   const update = (changes: Record<string, string | undefined>, replace = false) =>
@@ -101,8 +89,10 @@ export function Component() {
           />
         </form>
         <Select
-          value={when}
-          onValueChange={(value) => update({ when: value === 'any' ? undefined : value })}
+          value={dates.when ?? 'any'}
+          onValueChange={(value) =>
+            update({ when: value === 'any' ? undefined : value, from: undefined, to: undefined })
+          }
         >
           <SelectTrigger aria-label="Date" className="h-11! w-full rounded-full sm:w-48">
             <CalendarDays className="text-muted-foreground" />
