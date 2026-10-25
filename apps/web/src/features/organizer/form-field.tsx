@@ -44,3 +44,22 @@ export function FormField({ name, label, hint, className, children }: FormFieldP
     </Field>
   );
 }
+
+type EventFormPageProps = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+};
+
+/** Frame for the create and edit pages: heading, then the form and its live preview side by side. */
+export function EventFormPage({ eyebrow, title, description, children }: EventFormPageProps) {
+  return (
+    <div className="page-container max-w-6xl py-8 sm:py-12">
+      <p className="text-primary text-sm font-medium">{eyebrow}</p>
+      <h1 className="mt-1 text-3xl font-semibold sm:text-4xl">{title}</h1>
+      <p className="text-muted-foreground mt-1 mb-8">{description}</p>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">{children}</div>
+    </div>
+  );
+}

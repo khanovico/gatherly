@@ -191,7 +191,11 @@ export function EventForm({
         </Section>
 
         <Section title="Tickets">
-          <FormField name="capacity" label="Capacity" hint="Up to 10,000 seats.">
+          <FormField
+            name="capacity"
+            label="Capacity"
+            hint={`${registeredCount ? `${registeredCount} already registered. ` : ''}Up to 10,000 seats.`}
+          >
             <Input
               type="number"
               min={1}
