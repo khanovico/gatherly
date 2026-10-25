@@ -71,6 +71,18 @@ The seed uses dates relative to today, and the server re-seeds when no upcoming 
 
 ## Run it locally
 
+### Quick start
+
+Prerequisite: Docker only.
+
+```bash
+docker compose up
+```
+
+Open [localhost:3000](http://localhost:3000). The first build takes about 40 seconds; migrations and the demo seed run automatically, so the demo personas are ready to use. Set `APP_PORT` or `DB_PORT` if ports 3000 or 54329 are taken.
+
+### Development
+
 Prerequisites: Node 22.12 or newer, pnpm 9 (`corepack enable` provides it), and Docker for Postgres.
 
 ```bash
@@ -81,7 +93,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open [localhost:5173](http://localhost:5173). The web dev server proxies `/api` to the API on port 3000. On first start the API creates the demo personas and seeds sample events.
+Open [localhost:5173](http://localhost:5173). The web dev server proxies `/api` to the API on port 3000 and reloads on change. On first start the API creates the demo personas and seeds sample events.
 
 | Task | Command | Notes |
 |---|---|---|
@@ -153,6 +165,7 @@ No account needed: these views are public and read-only.
 | Sentry: [browser error](https://khandev-s1.sentry.io/share/issue/5d7cc0bd2b5a4701aba7387a0b4b86d1/) and [API error](https://khandev-s1.sentry.io/share/issue/25e21197641d4401a8ebfddb8027efa0/) | Two errors from the same trace, with stack traces |
 | Admin console, **Observability** tab (sign in as Sam) | Live version, database readiness and uptime, plus **Trigger test error**: sends a browser and an API error on one trace and shows the trace ID to look up in the dashboard |
 | `x-trace-id` header on every API response | The ID to find any request in the dashboard or in Sentry |
+| [API reference](https://gatherly--khanovicdev.replit.app/api/docs) | Interactive OpenAPI reference generated from the same schemas that validate requests ([raw spec](https://gatherly--khanovicdev.replit.app/api/openapi.json)) |
 
 Why public links rather than accounts, the privacy guardrails and the production path are in [docs/observability.md](docs/observability.md#see-it-live-no-account-needed).
 
