@@ -1,8 +1,9 @@
-import { LayoutGrid, ShieldCheck, Users } from 'lucide-react';
+import { CalendarDays, LayoutGrid, ShieldCheck, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AccessDenied } from '@/features/admin/access-denied';
+import { EventsTab } from '@/features/admin/events-tab';
 import { OverviewTab } from '@/features/admin/overview-tab';
 import { UsersTab } from '@/features/admin/users-tab';
 import { useMe } from '@/hooks/use-me';
@@ -10,6 +11,7 @@ import { useMe } from '@/hooks/use-me';
 const sections = [
   { value: 'overview', label: 'Overview', icon: LayoutGrid, Panel: OverviewTab },
   { value: 'users', label: 'Users', icon: Users, Panel: UsersTab },
+  { value: 'events', label: 'Events', icon: CalendarDays, Panel: EventsTab },
 ];
 
 export function Component() {
