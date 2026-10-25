@@ -1,9 +1,12 @@
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'tsup';
 
+// Replit adds an empty "Published your App" commit on every publish; report the last real one.
 const gitSha = () => {
   try {
-    return execSync('git rev-parse --short HEAD').toString().trim();
+    return execSync('git log -1 --format=%h --invert-grep --grep=^Replit-Commit-Author:')
+      .toString()
+      .trim();
   } catch {
     return 'unknown';
   }
