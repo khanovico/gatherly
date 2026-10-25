@@ -15,10 +15,13 @@ export const WEIGHTS = {
   formatMismatch: -2, // a format the viewer did not pick
 };
 const MAX_TAG_MATCHES = 2;
-const DEFAULT_RADIUS_KM = 10;
+export const DEFAULT_RADIUS_KM = 10;
 const NEW_DAYS = 7;
 const SOON_DAYS = 30;
 const MAX_REASONS = 3;
+// Diversity: at most this many events per category in the top slots.
+const DIVERSE_TOP = 8;
+const MAX_PER_CATEGORY = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Fill rate plus saves (capped), about 0–2. */
@@ -26,7 +29,7 @@ export const popularity = (c: Candidate) =>
   c.registeredCount / c.capacity + Math.min(c.saves, 20) / 20;
 
 /** Time slot and a label like "Friday evening", in the event's own time zone. */
-const timeOfWeek = (at: Date, timeZone: string): { slot: TimeSlot; label: string } => {
+export const timeOfWeek = (at: Date, timeZone: string): { slot: TimeSlot; label: string } => {
   const weekday = at.toLocaleString('en-US', { timeZone, weekday: 'long' });
   const hour = Number(at.toLocaleString('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }));
   const part = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -67,7 +70,25 @@ const terms = (c: Located, { profile: p, now }: RankContext): Term[] => {
   ];
 };
 
-/** Hand-tuned, explainable scoring: a weighted sum of terms; reasons are the strongest terms. */
+/** Keeps the top slots varied: later events of a crowded category move just below them. */
+const diversify = (ranked: Ranked[]) => {
+  const top: Ranked[] = [];
+  const rest: Ranked[] = [];
+  const perCategory = new Map<Category, number>();
+  for (const r of ranked) {
+    const n = perCategory.get(r.category) ?? 0;
+    if (top.length < DIVERSE_TOP && n < MAX_PER_CATEGORY) {
+      top.push(r);
+      perCategory.set(r.category, n + 1);
+    } else rest.push(r);
+  }
+  return [...top, ...rest];
+};
+
+/**
+ * Hand-tuned, explainable scoring: a weighted sum of terms, then a diversity rerank. Reasons are
+ * the strongest terms.
+ */
 export class RuleBasedRanker implements Ranker {
   readonly version = 'rules-v1';
 
@@ -81,7 +102,7 @@ export class RuleBasedRanker implements Ranker {
         .map((t) => t.reason!);
       return { ...c, score: scored.reduce((sum, t) => sum + t.value, 0), reasons };
     });
-    return ranked.sort((a, b) => b.score - a.score);
+    return diversify(ranked.sort((a, b) => b.score - a.score));
   }
 }
 
