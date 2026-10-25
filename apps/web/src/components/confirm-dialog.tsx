@@ -35,7 +35,7 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <DialogContent showCloseButton={!pending}>
-        <DialogHeader>
+        <DialogHeader className="pr-6">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
