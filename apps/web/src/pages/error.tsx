@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router';
 import { IllustratedState } from '@/components/illustrated-state';
 import { Button } from '@/components/ui/button';
-import { Component as NotFound } from '@/pages/not-found';
+import { NotFound } from '@/components/not-found';
 
 export function ErrorBoundary() {
   const error = useRouteError();
