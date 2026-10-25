@@ -52,7 +52,7 @@ Sign in as Sam, open **Admin**, then **Observability**, and press **Trigger test
 | `apps/web` | React single-page app (Vite, TanStack Query, React Router, Tailwind, shadcn/ui). `src/pages` has one file per route, `src/features` the page-specific components |
 | `packages/shared` | Zod schemas, types, enums and error codes shared by API and web, so contracts cannot drift |
 | `ops/grafana` | Grafana dashboard for request rate, errors, latency and business counters |
-| `docs` | Architecture, API, monetization, observability, roadmap and decision records |
+| `docs` | Architecture, API, operations, monetization, observability, roadmap and decision records |
 | `.github/workflows` | CI: lint, type check, tests against Postgres, build |
 | `.replit` | Build and run configuration for the hosted demo |
 

@@ -419,7 +419,7 @@ A suspended user gets 403 `ACCOUNT_SUSPENDED` on every route that needs a sessio
 | Media | Seeded images shipped with the app | Uploads to object storage behind a CDN, with resizing | Upload handling adds moderation and abuse surface |
 | Clients | Responsive, mobile-first web | iOS and Android apps (section 11) | The API and shared schemas are already client-agnostic |
 | Observability | Traces, logs, metrics, errors, dashboard, health endpoints | Collector with tail sampling, SLOs and alerts, real user monitoring | Free tiers and one service do not need a collector yet |
-| Environments | One live deployment, local Docker Postgres, CI | Staging and production, backups with point-in-time recovery | Zero cost was a hard constraint |
+| Environments | One live deployment, local Docker Postgres, CI | Staging and production, backups with point-in-time recovery ([operations](operations.md#1-operations)) | Zero cost was a hard constraint |
 
 ## 8. Scaling considerations
 
@@ -448,7 +448,7 @@ The MVP is sized for a demo, but nothing in it blocks growth. Each pressure poin
 | Cross-site requests | Same-origin SPA, SameSite=Lax cookie, JSON-only API | CSRF token if any cross-site form or embed appears |
 | Secrets | Replit Secrets and local `.env` (never committed); config validated at startup | Secret manager with rotation |
 | Personal data | Email redacted from logs; logs and Sentry carry the account UUID (a random identifier), never email or name; preferences private; attendance visible only to the member themself; interactions hold IDs only; location opt-in and coarse | Notice and choice for personalization, data export and deletion, enforced retention ([ADR 0010](adr/0010-interaction-data.md)) |
-| Abuse | Rate limits per IP on sign-in, sign-up, demo sign-in and interaction logging, plus per target email on sign-in and per visitor on interactions, counted per instance; client IP read through a fixed number of trusted proxy hops (`TRUST_PROXY_HOPS`) so it cannot be spoofed with `X-Forwarded-For`; protected personas and demo-mode guardrails | Shared limit store; per-account registration caps and bot protection on high-demand events |
+| Abuse ([trust and safety](operations.md#3-trust-and-safety)) | Rate limits per IP on sign-in, sign-up, demo sign-in and interaction logging, plus per target email on sign-in and per visitor on interactions, counted per instance; client IP read through a fixed number of trusted proxy hops (`TRUST_PROXY_HOPS`) so it cannot be spoofed with `X-Forwarded-For`; protected personas and demo-mode guardrails | Shared limit store; per-account registration caps and bot protection on high-demand events |
 | Browser hardening | Security headers (helmet): HSTS, nosniff, frame denial, no referrer, and a Content Security Policy allowing only our own scripts, Sentry and, on `/api/docs`, the reference viewer | CSP violation reports collected in Sentry |
 | Supply chain | Lockfile, CI on every pull request | Dependency and secret scanning |
 
@@ -485,4 +485,4 @@ The brief targets web, iOS and Android. The MVP ships a responsive, mobile-first
 
 ## Further reading
 
-[API reference](api.md) · [Monetization design](monetization.md) · [Observability](observability.md) · [Roadmap](roadmap.md) · [Architecture decision records](adr/README.md)
+[API reference](api.md) · [Operations, cross-cutting, trust and safety](operations.md) · [Monetization design](monetization.md) · [Observability](observability.md) · [Roadmap](roadmap.md) · [Architecture decision records](adr/README.md)

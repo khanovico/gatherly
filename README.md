@@ -87,7 +87,7 @@ Open [localhost:5173](http://localhost:5173). Run the tests with `pnpm test`; li
 | Data | Migrations, check constraints, partial unique index, race-safe capacity | Managed Postgres with point-in-time recovery and a restore drill; migrations as a separate job; zero-downtime migration rules |
 | Abuse | Per-IP limits, per-email on sign-in, security headers and CSP, body size limits | Shared rate-limit store, bot protection on high-demand events, audit log of admin actions |
 | Personal data | Minimal interaction rows, first-party anonymous ID, telemetry keyed by account UUID, never email | Data export and deletion with anonymization, enforced retention job, consent where required |
-| Operations | Health, readiness and version endpoints; traces, logs, metrics, errors; CI | Staging, warm instances, SLOs with alerts, rollback runbook |
+| Operations | Health, readiness and version endpoints; traces, logs, metrics, errors; CI | Staging, warm instances, SLOs with alerts, rollback runbook ([docs/operations.md](docs/operations.md)) |
 
 The ordered plan with triggers is in [docs/roadmap.md](docs/roadmap.md).
 
@@ -97,6 +97,7 @@ The ordered plan with triggers is in [docs/roadmap.md](docs/roadmap.md).
 |---|---|
 | [Architecture](docs/architecture.md) | Brief at a glance, system context, request flow, data model, access control, scaling, security, integrations, mobile |
 | [API](docs/api.md) | Endpoints, access rules and error codes per endpoint |
+| [Operations](docs/operations.md) | Environments, backups and RPO/RTO, migrations, flags, on-call; accessibility, i18n, privacy rights, PCI scope, cost; trust and safety |
 | [Observability](docs/observability.md) | Signals, trace flow, metrics, dashboard, public links and guardrails |
 | [Monetization](docs/monetization.md) | Plans, ticketing marketplace, seat holds, refunds, webhooks, tax |
 | [Roadmap](docs/roadmap.md) | Now, next and later |

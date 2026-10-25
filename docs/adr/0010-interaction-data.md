@@ -23,6 +23,8 @@ Personalization improves only if we know what people saw and what they did next.
 
 The web app records an impression only when a card is actually on screen and sends impressions in batches to `POST /interactions`, so scrolling does not mean one request per card. Saves, hides, registrations and cancellations are state in their own tables; the interaction row adds the context (surface, position, ranker version) that links the outcome back to the impression.
 
+**Trust in the data.** `POST /interactions` is public and rate-limited, so its rows are untrusted input. For evaluation and training, outcomes come from the server: saves, hides, registrations and cancellations are read from their own tables, never from client-sent interaction types. Before the first offline evaluation, the API adds a server-side serving log (request ID, ranker version, ordered event IDs and scores for every ranked response), so what was shown does not depend on the browser reporting it. See [operations](../operations.md#4-ranking-data-integrity).
+
 **Protect:**
 
 | Principle | Rule |
